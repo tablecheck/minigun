@@ -2,25 +2,87 @@
 
 module Minigun
   class Runner
-    ACCUMULATOR_MAX_SINGLE_QUEUE = 2000 # 10_000
-    ACCUMULATOR_MAX_ALL_QUEUES = ACCUMULATOR_MAX_SINGLE_QUEUE * 2 # 3
-    ACCUMULATOR_CHECK_INTERVAL = 100
-    CONSUMER_THREAD_BATCH_SIZE = 200 # 1000
-    CONSUMER_QUERY_BATCH_SIZE  = 200
-    DEFAULT_MAX_RETRIES = 10
+    module InstanceMethods
+      def _producers
+        @producers ||= []
+      end
+
+      # Takes a class, proc, block
+      def producer(callable = nil, &block)
+        if block_given?
+          _producers << block
+        elsif callable.is_a?(Proc) || callable.respond_to?(:call)
+          _producers << callable
+        elsif callable.is_a?(Class) && callable.instance_methods.include?(:call)
+          _producers << callable.new
+        elsif callable.is_a?(Symbol)
+          _producers << -> { instance_eval { send(proc_or_symbol) }
+        end
+      end
+      alias_method :produce, :producer
+
+      # Takes a class, proc, block
+      def accumulator(*args, &block)
+
+      end
+      alias_method :accumulate, :accumulator
+
+      # Takes a class, proc, block
+      def consumer(*args, &block)
+
+      end
+      alias_method :consume, :consumer
+    end
+
+    class << self
+
+      def end_object
+        :eoq
+      end
+
+      def log_writer
+        @log_writer ||= LogWriter.new
+      end
+
+      %i[
+        max_processes
+        max_threads
+        max_retries
+      ].each do |setting|
+        define_method(setting) do |value = nil|
+          value.nil? ? Config.send(setting) : Config.send("#{setting}=", value)
+        end
+      end
+
+      def config
+
+      end
+
+      def callbacks
+        @callbacks ||= Hash.new { |h, k| h[k] = [] }
+      end
+
+      # before_job
+      # after_job
+      # before_job_start
+      # after_job_done
+      # before_consumer_fork
+      # after_consumer_fork
+      # before_consumer_thread_start
+      # after_consumer_thread_start
+
+    end
+
     TIME_ZONE = 'Asia/Tokyo'
     LOCALE = :en
-    MODEL_INCLUDES = {}.freeze
-    MODELS_TRANSACTIONAL = %w[ Foo
-                               Bar ].freeze
 
-    def initialize(models: nil,
+    def initialize(queues: nil,
                    start_time: nil,
                    end_time: nil,
                    max_processes: nil,
                    max_threads: nil,
                    max_retries: nil)
-      @raw_models = Array(models) if models
+      @raw_queues = Array(queues) if queues
       @start_time = start_time
       @end_time   = end_time
       time_range
@@ -33,17 +95,19 @@ module Minigun
 
     def perform
       in_time_zone_and_locale do
+        callbacks.invoke(:before_bootstrap)
         bootstrap!
-        job_start_at
-        report_job_started
-        before_job_start!
+        callbacks.invoke(:before_job_start)
+        memoize_job_started
+        log_writer.log_job_started
+        callbacks.invoke(:before_job_start)
         producer_thread = start_producer_thread
         accumulator_thread = start_accumulator_thread
         producer_thread.join
         accumulator_thread.join
         wait_all_consumer_processes
-        report_job_finished
-        after_job_finished!
+        log_writer.log_job_finished
+        callbacks.invoke(:after_job)
       end
     end
     alias_method :perform, :go_brrr
@@ -53,63 +117,18 @@ module Minigun
 
     attr_reader :max_retries
 
-    def models
-      @models ||= (@raw_models || default_models).map {|model| load_model(model) }
-    end
+    # def queues
+    #   @queues ||= (@raw_queues || default_queues).map {|queue| load_queue(queue) }
+    # end
+    #
+    # def load_queue(queue)
+    #   return queue if queue.is_a?(Module)
+    #   queue = "::#{queue}" unless queue.include?(':')
+    #   Object.const_get(queue)
+    # end
 
-    def load_model(model)
-      return model if model.is_a?(Module)
-      model = "::#{model}" unless model.include?(':')
-      Object.const_get(model)
-    end
 
-    def start_producer_thread
-      @object_id_queue = SizedQueue.new(max_processes * max_threads * 2)
-      Thread.new do
-        Rails.logger.info { "[Producer] Started master producer thread." }
-        @producer_model_threads = []
-        @producer_semaphore = Concurrent::Semaphore.new(max_threads)
-        @producer_mutex = Mutex.new
-        models_queue = models.dup
-        while (model = models_queue.pop)
-          @producer_model_threads << start_producer_model_thread(model)
-        end
-        @producer_model_threads.each(&:join)
-        @object_id_queue << end_object
-        Rails.logger.info { "[Producer] Done. #{@produced_count} object IDs produced." }
-      end
-    end
 
-    def start_producer_model_thread(model)
-      @producer_semaphore.acquire
-      Thread.new do
-        with_mongo_secondary(model) do
-          model_name = model.to_s.demodulize
-          Rails.logger.info { "[Producer] #{model_name}: Started model thread." }
-          time_range_in_batches(model).each do |range|
-            on_retry   = ->(e, attempts) { Rails.logger.warn { "[Producer] #{model_name}: Error fetching IDs in #{format_time_range(range)}, attempt #{attempts} of #{max_retries}: #{e.class}: #{e.message}. Retrying..." } }
-            on_failure = ->(e, _attempts) { Rails.logger.error { "[Producer] #{model_name}: Failed fetching IDs in #{format_time_range(range)} after #{max_retries} attempts: #{e.class}: #{e.message}. Skipping." } }
-            with_retry(on_retry: on_retry, on_failure: on_failure) do
-              Rails.logger.info { "[Producer] #{model_name}: Producing time range #{format_time_range(range)}..." }
-              count = produce_model(model, range)
-              Rails.logger.info { "[Producer] #{model_name}: Produced #{count} IDs in time range #{format_time_range(range)}." }
-            end
-          end
-        end
-        GC.start
-        @producer_semaphore.release
-      end
-    end
-
-    def produce_model(model, range)
-      count = 0
-      model.unscoped.where(updated_at: range).pluck_each(:_id) do |id|
-        @object_id_queue << [model, id.to_s.freeze].freeze
-        @producer_mutex.synchronize { @produced_count += 1 }
-        count += 1
-      end
-      count
-    end
 
     def start_accumulator_thread
       @consumer_pids = []
@@ -118,8 +137,8 @@ module Minigun
         accumulator_map = Hash.new {|h, k| h[k] = Set.new }
 
         i = 0
-        until (model, id = @object_id_queue.pop) == end_object
-          accumulator_map[model] << id
+        until (queue, id = @accumulator_queue.pop) == end_object
+          accumulator_map[queue] << id
           i += 1
           check_accumulator(accumulator_map) if i >= ACCUMULATOR_MAX_SINGLE_QUEUE && i % ACCUMULATOR_CHECK_INTERVAL == 0
         end
@@ -133,9 +152,9 @@ module Minigun
 
     def check_accumulator(accumulator_map)
       # Fork if any queue contains more than N IDs
-      accumulator_map.each do |model, ids|
+      accumulator_map.each do |queue, ids|
         next unless (count = ids.size) >= ACCUMULATOR_MAX_SINGLE_QUEUE
-        fork_consumer({ model => accumulator_map.delete(model) })
+        fork_consumer({ queue => accumulator_map.delete(queue) })
         @accumulated_count += count
         GC.start
       end
@@ -168,9 +187,9 @@ module Minigun
       @consumer_threads = []
       @consumer_mutex = Mutex.new
       @consumer_semaphore = Concurrent::Semaphore.new(max_threads)
-      object_map.each do |model, object_ids|
+      object_map.each do |queue, object_ids|
         object_ids.uniq.in_groups_of(CONSUMER_THREAD_BATCH_SIZE, false).each do |object_ids_batch|
-          @consumer_threads << start_consumer_thread(model, object_ids_batch)
+          @consumer_threads << start_consumer_thread(queue, object_ids_batch)
         end
       end
       @consumer_threads.each(&:join)
@@ -178,20 +197,20 @@ module Minigun
       Rails.logger.info { "[Consumer]#{format_pid}: Done. #{@consumed_count} objects consumed." }
     end
 
-    def start_consumer_thread(model, object_ids)
+    def start_consumer_thread(queue, object_ids)
       @consumer_semaphore.acquire
       thread_index = @consumer_mutex.synchronize { @consumer_thread_index += 1 }
       Thread.new do
-        with_mongo_secondary(model) do
-          model_name = model.to_s.demodulize
+        with_mongo_secondary(queue) do
+          queue_name = queue.to_s.demodulize
           Rails.logger.info { "[Consumer]#{format_pid}: Started thread #{thread_index}." }
           object_ids.in_groups_of(CONSUMER_QUERY_BATCH_SIZE, false).each do |object_ids_batch|
-            on_retry   = ->(e, attempts) { Rails.logger.warn { "[Consumer]#{format_pid}, Thread #{thread_index}: Error consuming #{model_name}, attempt #{attempts} of #{max_retries}: #{e.class}: #{e.message}. Retrying..." } }
-            on_failure = ->(e, _attempts) { Rails.logger.error { "[Consumer]#{format_pid}, Thread #{thread_index}: Failed consuming #{model_name} after #{max_retries} attempts: #{e.class}: #{e.message}. Skipping." } }
+            on_retry   = ->(e, attempts) { Rails.logger.warn { "[Consumer]#{format_pid}, Thread #{thread_index}: Error consuming #{queue_name}, attempt #{attempts} of #{max_retries}: #{e.class}: #{e.message}. Retrying..." } }
+            on_failure = ->(e, _attempts) { Rails.logger.error { "[Consumer]#{format_pid}, Thread #{thread_index}: Failed consuming #{queue_name} after #{max_retries} attempts: #{e.class}: #{e.message}. Skipping." } }
             with_retry(on_retry: on_retry, on_failure: on_failure) do
-              count = consume_batch(model, object_ids_batch)
+              count = consume_batch(queue, object_ids_batch)
               @consumer_mutex.synchronize { @consumed_count += count }
-              Rails.logger.info { "[Consumer]#{format_pid}, Thread #{thread_index}: Consumed #{count} #{model_name} objects." }
+              Rails.logger.info { "[Consumer]#{format_pid}, Thread #{thread_index}: Consumed #{count} #{queue_name} objects." }
             end
           end
         end
@@ -199,20 +218,20 @@ module Minigun
       end
     end
 
-    def consume_batch(model, object_ids)
+    def consume_batch(queue, object_ids)
       count = 0
-      consumer_scope(model, object_ids).each do |object|
+      consumer_scope(queue, object_ids).each do |object|
         consume_object(object)
         count += 1
       rescue StandardError => e
-        Bugsnag.notify(e) {|r| r.add_metadata('publisher', model: model.to_s, object_id: object&._id) }
+        Bugsnag.notify(e) {|r| r.add_metadata('publisher', queue: queue.to_s, object_id: object&._id) }
       end
       count
     end
 
-    def consumer_scope(model, object_ids)
-      includes = MODEL_INCLUDES[model.to_s].presence
-      scope = model.unscoped.any_in(_id: object_ids)
+    def consumer_scope(queue, object_ids)
+      includes = queue_INCLUDES[queue.to_s].presence
+      scope = queue.unscoped.any_in(_id: object_ids)
       scope = scope.includes(includes) if includes
       scope
     end
@@ -248,12 +267,12 @@ module Minigun
       end
     end
 
-    def time_range_in_batches(model)
+    def time_range_in_batches(queue)
       time_ranges = []
       t = time_range.first
       t_end = time_range.end
       now = Time.current
-      batch_size = time_range_batch_size(model)
+      batch_size = time_range_batch_size(queue)
       while t < (t_end || now)
         t_next = t + batch_size
         t_batch_end = if t_end&.<=(t_next)
@@ -269,8 +288,8 @@ module Minigun
       time_ranges
     end
 
-    def time_range_batch_size(model)
-      @time_range_batch_size ||= model.to_s.in?(MODELS_TRANSACTIONAL) ? 1.hour : 1.day
+    def time_range_batch_size(queue)
+      @time_range_batch_size ||= queue.to_s.in?(queueS_TRANSACTIONAL) ? 1.hour : 1.day
     end
 
     def in_time_zone_and_locale(&block)
@@ -330,10 +349,6 @@ module Minigun
       # Can be overridden in subclass
     end
 
-    def end_object
-      :eoq
-    end
-
     def with_retry(on_retry: nil, on_failure: nil)
       attempts = 0
       begin
@@ -354,9 +369,9 @@ module Minigun
       sleep((5**attempts) / 100.0 + rand(0.05..1))
     end
 
-    def with_mongo_secondary(model, &)
+    def with_mongo_secondary(queue, &)
       read_opts = { mode: :secondary_preferred }
-      model.with(read: read_opts, &)
+      queue.with(read: read_opts, &)
     end
 
     def report_job_started
