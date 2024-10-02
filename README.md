@@ -1,4 +1,4 @@
-![Minigun](https://github.com/user-attachments/assets/4029ef27-a897-4ae4-9e7d-846c9dfa5fda)
+![Minigun](https://github.com/user-attachments/assets/34f98867-824a-4752-8248-2eab75bf4320)
 
 # Minigun go BRRR
 
