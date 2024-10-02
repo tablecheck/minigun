@@ -1,3 +1,5 @@
+![Minigun](https://github.com/user-attachments/assets/0c9ee9ed-8592-43f7-bdb5-1abe0c84210e)
+
 # Minigun go BRRR
 
 Minigun is a lightweight framework for rapid-fire batch job processing
