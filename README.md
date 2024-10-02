@@ -1,6 +1,6 @@
 ![Minigun](https://github.com/user-attachments/assets/34f98867-824a-4752-8248-2eab75bf4320)
 
-# Minigun go BRRR
+# minigun go BRRRRR
 
 Minigun is a lightweight framework for rapid-fire batch job processing
 using a Producer-Accumulator-Consumer pattern. Minigun uses forking and threads
