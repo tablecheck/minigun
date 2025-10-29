@@ -8,7 +8,7 @@
 require_relative '../lib/minigun'
 
 # Demonstrates broadcast fan-out to multiple downstream stages
-class BroadcastPipeline
+class BroadcastFanOutExample
   include Minigun::DSL
 
   attr_accessor :results
@@ -22,7 +22,7 @@ class BroadcastPipeline
     # Producer with explicit broadcast routing to multiple consumers
     # routing: :broadcast sends each item to ALL branches (default behavior)
     # This is useful for ETL where the same data needs multiple transformations
-    producer :data_source, to: %i[validate transform analyze], routing: :broadcast do
+    producer :data_source, to: %i[validate transform analyze], routing: :broadcast do |output|
       puts "\n[Producer] Generating data..."
       3.times { |i| output << { id: i, value: i * 10 } }
     end
@@ -58,7 +58,7 @@ class BroadcastPipeline
 end
 
 # Run the pipeline
-pipeline = BroadcastPipeline.new
+pipeline = BroadcastFanOutExample.new
 pipeline.run
 
 # Display results

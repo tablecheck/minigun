@@ -3,24 +3,30 @@
 require_relative '../lib/minigun'
 
 # Example demonstrating queue sizing and backpressure
-class BackpressureDemo
+class BackpressureDemoExample
   include Minigun::DSL
 
+  attr_reader :items_to_generate
+
+  def initialize(items: 100)
+    @items_to_generate = items
+  end
+
   pipeline do
-    # Fast producer - generates 1000 items immediately
+    # Fast producer - generates items immediately
     producer :fast_producer do |output|
-      puts 'Producer: Starting to generate 1000 items...'
-      1000.times do |i|
+      puts "Producer: Starting to generate #{@items_to_generate} items..."
+      @items_to_generate.times do |i|
         output << i
-        print '.' if (i % 100) == 0
+        print '.' if (@items_to_generate >= 100) && (i % 100) == 0
       end
       puts "\nProducer: Done! (Would finish instantly without backpressure)"
     end
 
     # Slow consumer with small queue (creates backpressure)
     consumer :slow_consumer, queue_size: 10 do |item, _output|
-      sleep 0.01 # Simulate slow processing
-      puts "Consumer: Processed item #{item}" if (item % 100) == 0
+      sleep 0.001 # Simulate slow processing (reduced for tests)
+      puts "Consumer: Processed item #{item}" if (@items_to_generate >= 100) && (item % 100) == 0
     end
   end
 end
@@ -158,7 +164,7 @@ if __FILE__ == $PROGRAM_NAME
   puts 'Example 1: Fast Producer + Slow Consumer (queue_size: 10)'
   puts '=' * 70
   puts 'Watch how the producer is throttled by the small queue'
-  BackpressureDemo.new.run
+  BackpressureDemoExample.new(items: 1000).run
 
   # Example 2: Multi-stage with different queue sizes
   puts "\n#{'=' * 70}"

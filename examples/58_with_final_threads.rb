@@ -7,7 +7,7 @@
 require_relative '../lib/minigun'
 
 # Demonstrates threads block after process-per-batch
-class WithFinalThreads
+class WithFinalThreadsExample
   include Minigun::DSL
 
   attr_reader :results
@@ -45,7 +45,7 @@ class WithFinalThreads
 end
 
 puts 'Testing: threads + batch + process_per_batch + threads(consumer)'
-pipeline = WithFinalThreads.new
+pipeline = WithFinalThreadsExample.new
 pipeline.run
 puts "Results: #{pipeline.results.size} items"
 puts pipeline.results.size == 20 ? '✓ Works!' : '✗ Failed'

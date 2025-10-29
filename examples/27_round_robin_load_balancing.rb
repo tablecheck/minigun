@@ -8,7 +8,7 @@
 require_relative '../lib/minigun'
 
 # Demonstrates round-robin load balancing across multiple workers
-class LoadBalancedWorkers
+class RoundRobinLoadBalancingExample
   include Minigun::DSL
 
   attr_accessor :results
@@ -21,7 +21,7 @@ class LoadBalancedWorkers
   pipeline do
     # Producer with explicit round-robin routing to multiple consumers
     # routing: :round_robin distributes items evenly across workers for load balancing
-    producer :generate_work, to: %i[worker1 worker2 worker3], routing: :round_robin do
+    producer :generate_work, to: %i[worker1 worker2 worker3], routing: :round_robin do |output|
       puts "\n[Producer] Generating 10 work items..."
       10.times { |i| output << i }
     end
@@ -55,7 +55,7 @@ class LoadBalancedWorkers
 end
 
 # Run the pipeline
-pipeline = LoadBalancedWorkers.new
+pipeline = RoundRobinLoadBalancingExample.new
 pipeline.run
 
 # Display results

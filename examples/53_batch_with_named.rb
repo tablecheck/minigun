@@ -7,13 +7,14 @@
 require_relative '../lib/minigun'
 
 # Demonstrates batching combined with named contexts
-class BatchWithNamed
+class BatchWithNamedExample
   include Minigun::DSL
 
-  attr_reader :results
+  attr_reader :results, :batches_processed
 
   def initialize
     @results = []
+    @batches_processed = 0
     @mutex = Mutex.new
   end
 
@@ -31,6 +32,7 @@ class BatchWithNamed
     batch 5
 
     processor :process_batch do |batch, output|
+      @mutex.synchronize { @batches_processed += 1 }
       batch.each { |item| output << (item * 2) }
     end
 
@@ -41,7 +43,7 @@ class BatchWithNamed
 end
 
 puts 'Testing: batch + named context'
-pipeline = BatchWithNamed.new
+pipeline = BatchWithNamedExample.new
 pipeline.run
 puts "Results: #{pipeline.results.size} items"
 puts '✓ Batch + named works' if pipeline.results.size == 30

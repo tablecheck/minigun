@@ -7,7 +7,7 @@
 require_relative '../lib/minigun'
 
 # Demonstrates process-per-batch with named contexts
-class ProcessBatchNamed
+class ProcessBatchNamedExample
   include Minigun::DSL
 
   attr_reader :results
@@ -48,7 +48,7 @@ class ProcessBatchNamed
 end
 
 puts 'Testing: process_per_batch + named contexts'
-pipeline = ProcessBatchNamed.new
+pipeline = ProcessBatchNamedExample.new
 pipeline.run
 puts "Results: #{pipeline.results.size} items"
 puts '✓ Process batch + named works' if pipeline.results.size == 20

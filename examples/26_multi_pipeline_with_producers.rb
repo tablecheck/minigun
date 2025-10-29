@@ -6,7 +6,7 @@ require_relative '../lib/minigun'
 # Single Task with two nested pipelines
 # Pipeline A processes items and routes to Pipeline B
 # Pipeline B has its own multiple producers + receives from Pipeline A
-class MultiPipelineTask
+class MultiPipelineWithProducersExample
   include Minigun::DSL
 
   attr_accessor :results

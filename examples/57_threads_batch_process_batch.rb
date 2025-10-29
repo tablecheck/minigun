@@ -7,7 +7,7 @@
 require_relative '../lib/minigun'
 
 # Demonstrates threads, batching, and process-per-batch together
-class ThreadsBatchProcessBatch
+class ThreadsBatchProcessBatchExample
   include Minigun::DSL
 
   attr_reader :results
@@ -43,7 +43,7 @@ class ThreadsBatchProcessBatch
 end
 
 puts 'Testing: threads + batch + process_per_batch + consumer'
-pipeline = ThreadsBatchProcessBatch.new
+pipeline = ThreadsBatchProcessBatchExample.new
 pipeline.run
 puts "Results: #{pipeline.results.size} items"
 puts pipeline.results.size == 20 ? '✓ Works!' : '✗ Failed'

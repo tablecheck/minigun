@@ -7,7 +7,7 @@
 require_relative '../lib/minigun'
 
 # Demonstrates exact structure matching for testing
-class ExactStructure
+class ExactStructureExample
   include Minigun::DSL
 
   attr_reader :stats
@@ -58,7 +58,7 @@ class ExactStructure
       end
     end
 
-    processor :save_db, execution_context: :db_pool do |item|
+    processor :save_db, execution_context: :db_pool do |item, output|
       output << item
     end
 
@@ -71,7 +71,7 @@ class ExactStructure
 end
 
 puts 'Testing: exact structure of example 55'
-pipeline = ExactStructure.new
+pipeline = ExactStructureExample.new
 pipeline.run
 
 puts "\nResults:"

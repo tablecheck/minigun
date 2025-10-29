@@ -7,7 +7,7 @@ require_relative '../lib/minigun'
 # between different execution contexts (threads, processes, etc.)
 
 # Demonstrates cross-context routing with automatic IPC handling
-class CrossContextRoutingExample
+class CrossContextEmitExample
   include Minigun::DSL
 
   attr_reader :stats
@@ -46,7 +46,7 @@ class CrossContextRoutingExample
 
     # Router stage - decides which consumer to route to based on task type
     # This stage runs inline (default)
-    stage :router do |task|
+    processor :router do |task, output|
       target_stage = case task[:type]
                      when 'fast'
                        :fast_processor
@@ -60,9 +60,9 @@ class CrossContextRoutingExample
 
       puts "  🔀 Routing task #{task[:id]} (#{task[:type]}) → #{target_stage}"
 
-      # Use emit_to_stage to route to specific consumer
+      # Use output.to() to route to specific consumer
       # Each consumer runs in a different execution context
-      emit_to_stage(target_stage, task)
+      output.to(target_stage) << task
 
       # Track routing
       @mutex.synchronize do
@@ -115,6 +115,6 @@ end
 
 # Run the example if executed directly
 if __FILE__ == $PROGRAM_NAME
-  example = CrossContextRoutingExample.new
+  example = CrossContextEmitExample.new
   example.run
 end

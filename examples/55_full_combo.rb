@@ -7,7 +7,7 @@
 require_relative '../lib/minigun'
 
 # Demonstrates all execution features combined
-class FullCombo
+class FullComboExample
   include Minigun::DSL
 
   attr_reader :stats
@@ -75,7 +75,7 @@ class FullCombo
 end
 
 puts 'Testing: full combination (mini example 38)'
-pipeline = FullCombo.new
+pipeline = FullComboExample.new
 pipeline.run
 
 puts "\nResults:"

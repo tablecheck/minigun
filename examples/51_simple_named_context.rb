@@ -7,7 +7,7 @@
 require_relative '../lib/minigun'
 
 # Demonstrates basic named context usage
-class SimpleNamedContext
+class SimpleNamedContextExample
   include Minigun::DSL
 
   attr_reader :results
@@ -35,7 +35,7 @@ class SimpleNamedContext
 end
 
 puts 'Testing: named context only'
-pipeline = SimpleNamedContext.new
+pipeline = SimpleNamedContextExample.new
 pipeline.run
 puts "Results: #{pipeline.results.size} items"
 puts '✓ Named context works' if pipeline.results.size == 10
