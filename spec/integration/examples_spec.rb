@@ -1095,6 +1095,38 @@ RSpec.describe 'Examples Integration' do
     end
   end
 
+  describe '65_pipeline_exit_to_entrance_fan_out.rb' do
+    it 'demonstrates multiple pipeline exits fanning out to multiple pipeline entrances' do
+      load File.expand_path('../../examples/65_pipeline_exit_to_entrance_fan_out.rb', __dir__)
+
+      example = PipelineExitToEntranceFanOutExample.new
+      example.run
+
+      # Verify we got all items (6 items per processor)
+      expect(example.results_x.size).to eq(6)
+      expect(example.results_y.size).to eq(6)
+      expect(example.results_z.size).to eq(6)
+
+      # Verify processor X (add 10)
+      x_from_a = example.results_x.select { |r| r[:source] == :a }.map { |r| r[:value] }.sort
+      x_from_b = example.results_x.select { |r| r[:source] == :b }.map { |r| r[:value] }.sort
+      expect(x_from_a).to eq([12, 14, 16]) # 2+10, 4+10, 6+10
+      expect(x_from_b).to eq([11, 13, 15]) # 1+10, 3+10, 5+10
+
+      # Verify processor Y (multiply 2)
+      y_from_a = example.results_y.select { |r| r[:source] == :a }.map { |r| r[:value] }.sort
+      y_from_b = example.results_y.select { |r| r[:source] == :b }.map { |r| r[:value] }.sort
+      expect(y_from_a).to eq([4, 8, 12])   # 2*2, 4*2, 6*2
+      expect(y_from_b).to eq([2, 6, 10])   # 1*2, 3*2, 5*2
+
+      # Verify processor Z (square)
+      z_from_a = example.results_z.select { |r| r[:source] == :a }.map { |r| r[:value] }.sort
+      z_from_b = example.results_z.select { |r| r[:source] == :b }.map { |r| r[:value] }.sort
+      expect(z_from_a).to eq([4, 16, 36])  # 2^2, 4^2, 6^2
+      expect(z_from_b).to eq([1, 9, 25])   # 1^2, 3^2, 5^2
+    end
+  end
+
   # Coverage check: ensure all example files have tests
   describe 'Example Coverage' do
     it 'has tests for all example files' do
