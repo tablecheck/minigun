@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require 'tsort'
-require 'set'
 
 module Minigun
   # Directed Acyclic Graph for stage routing using Ruby's TSort
@@ -195,13 +194,13 @@ module Minigun
     end
 
     # Required by TSort: iterate over all nodes
-    def tsort_each_node(&block)
-      @nodes.each(&block)
+    def tsort_each_node(&)
+      @nodes.each(&)
     end
 
     # Required by TSort: iterate over children of a given node
-    def tsort_each_child(node, &block)
-      @edges[node].each(&block)
+    def tsort_each_child(node, &)
+      @edges[node].each(&)
     end
   end
 end

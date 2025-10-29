@@ -5,14 +5,14 @@ require_relative '../lib/minigun'
 
 # Custom producer using yield syntax
 class NumberGenerator < Minigun::ProducerStage
-  def call(output)
+  def call
     10.times { |i| yield i }
   end
 end
 
 # Custom processor using yield syntax
 class Doubler < Minigun::ConsumerStage
-  def call(number, output)
+  def call(number)
     yield(number * 2)
   end
 end
@@ -57,8 +57,7 @@ if __FILE__ == $PROGRAM_NAME
   puts "\nAll values doubled: #{example.results.sort == [0, 2, 4, 6, 8, 10, 12, 14, 16, 18] ? '✓' : '✗'}"
   puts "\n✓ Quick start with yield complete!"
   puts "\nKey takeaway:"
-  puts "  • Custom stage classes with #call can use native Ruby yield"
-  puts "  • Mix and match with block-based stages"
-  puts "  • Same power, cleaner syntax!"
+  puts '  • Custom stage classes with #call can use native Ruby yield'
+  puts '  • Mix and match with block-based stages'
+  puts '  • Same power, cleaner syntax!'
 end
-

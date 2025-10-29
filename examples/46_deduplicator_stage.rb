@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require_relative '../lib/minigun'
-require 'set'
 
 # Custom stage that filters duplicate items based on accumulated state
 class DeduplicatorStage < Minigun::Stage

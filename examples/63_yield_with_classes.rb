@@ -5,16 +5,16 @@ require_relative '../lib/minigun'
 
 # Custom producer stage using yield syntax
 class NumberGenerator < Minigun::ProducerStage
-  def call(output)
+  def call(_output)
     10.times do |i|
-      yield i  # Use native Ruby yield!
+      yield i # Use native Ruby yield!
     end
   end
 end
 
 # Custom processor stage using yield with routing
 class ParityRouter < Minigun::ConsumerStage
-  def call(number, output)
+  def call(number, _output)
     if number.even?
       yield(number, to: :process_even)
     else
@@ -25,15 +25,15 @@ end
 
 # Custom processor for even numbers
 class EvenProcessor < Minigun::ConsumerStage
-  def call(number, output)
-    yield(number * 2)  # Double even numbers
+  def call(number, _output)
+    yield(number * 2) # Double even numbers
   end
 end
 
 # Custom processor for odd numbers
 class OddProcessor < Minigun::ConsumerStage
-  def call(number, output)
-    yield(number * 3)  # Triple odd numbers
+  def call(number, _output)
+    yield(number * 3) # Triple odd numbers
   end
 end
 
@@ -75,17 +75,17 @@ end
 if __FILE__ == $PROGRAM_NAME
   puts "=== Yield Syntax with Classes Example ===\n\n"
   puts 'Demonstrates using yield in custom stage classes:'
-  puts "  • Define stage as class inheriting from ProducerStage/ConsumerStage"
-  puts "  • Implement #call method"
-  puts "  • Use native Ruby yield syntax"
-  puts "  • yield(item) - emit to all downstream stages"
+  puts '  • Define stage as class inheriting from ProducerStage/ConsumerStage'
+  puts '  • Implement #call method'
+  puts '  • Use native Ruby yield syntax'
+  puts '  • yield(item) - emit to all downstream stages'
   puts "  • yield(item, to: :stage_name) - emit to specific stage\n\n"
 
   example = YieldWithClassesExample.new
   example.run
 
   puts "\n=== Results ===\n"
-  puts "Input: 0, 1, 2, 3, 4, 5, 6, 7, 8, 9"
+  puts 'Input: 0, 1, 2, 3, 4, 5, 6, 7, 8, 9'
   puts "Even numbers (doubled): #{example.even_results.sort.join(', ')}"
   puts "Odd numbers (tripled): #{example.odd_results.sort.join(', ')}"
 
@@ -97,4 +97,3 @@ if __FILE__ == $PROGRAM_NAME
   puts "\n✓ Yield syntax with classes example complete!"
   puts "\nNote: You can mix class-based stages (with yield) and block-based stages!"
 end
-

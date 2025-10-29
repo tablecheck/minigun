@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require 'set'
-
 module Minigun
   # Pipeline represents a single data processing pipeline with stages
   # A Pipeline can be standalone or part of a multi-pipeline Task

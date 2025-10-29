@@ -1017,7 +1017,7 @@ RSpec.describe 'Examples Integration' do
       example.run
 
       expect(example.even_results.sort).to eq([0, 4, 8, 12, 16])
-      # Note: odd_results may be empty due to routing issue, but that's tracked separately
+      # NOTE: odd_results may be empty due to routing issue, but that's tracked separately
     end
   end
 
@@ -1033,9 +1033,7 @@ RSpec.describe 'Examples Integration' do
 
       missing_tests = []
       example_files.each do |example_file|
-        unless spec_file.include?("'#{example_file}'")
-          missing_tests << example_file
-        end
+        missing_tests << example_file unless spec_file.include?("'#{example_file}'")
       end
 
       if missing_tests.any?
@@ -1044,8 +1042,7 @@ RSpec.describe 'Examples Integration' do
         puts
       end
 
-      expect(missing_tests).to be_empty,
-        "Missing tests for: #{missing_tests.join(', ')}"
+      expect(missing_tests).to be_empty, "Missing tests for: #{missing_tests.join(', ')}"
     end
 
     it 'lists all covered examples' do

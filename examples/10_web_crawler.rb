@@ -2,7 +2,6 @@
 # frozen_string_literal: true
 
 require_relative '../lib/minigun'
-require 'set'
 
 # Web Crawler Example
 # Demonstrates recursive web crawling with URL deduplication and depth tracking

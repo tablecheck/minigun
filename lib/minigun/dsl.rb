@@ -157,34 +157,34 @@ module Minigun
       end
 
       # Execution block methods
-      def threads(pool_size, &block)
+      def threads(pool_size, &)
         context = { type: :threads, pool_size: pool_size, mode: :pool }
-        _with_execution_context(context, &block)
+        _with_execution_context(context, &)
       end
 
-      def processes(pool_size, &block)
+      def processes(pool_size, &)
         context = { type: :processes, pool_size: pool_size, mode: :pool }
-        _with_execution_context(context, &block)
+        _with_execution_context(context, &)
       end
 
-      def ractors(pool_size, &block)
+      def ractors(pool_size, &)
         context = { type: :ractors, pool_size: pool_size, mode: :pool }
-        _with_execution_context(context, &block)
+        _with_execution_context(context, &)
       end
 
-      def thread_per_batch(max:, &block)
+      def thread_per_batch(max:, &)
         context = { type: :threads, max: max, mode: :per_batch }
-        _with_execution_context(context, &block)
+        _with_execution_context(context, &)
       end
 
-      def process_per_batch(max:, &block)
+      def process_per_batch(max:, &)
         context = { type: :processes, max: max, mode: :per_batch }
-        _with_execution_context(context, &block)
+        _with_execution_context(context, &)
       end
 
-      def ractor_per_batch(max:, &block)
+      def ractor_per_batch(max:, &)
         context = { type: :ractors, max: max, mode: :per_batch }
-        _with_execution_context(context, &block)
+        _with_execution_context(context, &)
       end
 
       # Batching shorthand
@@ -211,40 +211,40 @@ module Minigun
       end
 
       # Nested pipeline support
-      def pipeline(name, options = {}, &block)
+      def pipeline(name, options = {}, &)
         # This handles nested pipeline stages within a pipeline block
         raise 'Nested pipelines require instance context' unless @context
 
         # Get the task from context (instance or class)
         task = @context._minigun_task
-        task.add_nested_pipeline(name, options, &block)
+        task.add_nested_pipeline(name, options, &)
       end
 
       # Main unified stage method
       # Stage determines its own type based on block arity
       # Producer - generates items, receives output queue
-      def producer(name, options = {}, &block)
+      def producer(name, options = {}, &)
         options = _apply_execution_context(options)
         options[:stage_type] = :producer
-        @pipeline.add_stage(:stage, name, options, &block)
+        @pipeline.add_stage(:stage, name, options, &)
       end
 
       # Consumer - processes items, receives item and output queue
       # Whether it uses output or not is up to the stage implementation
-      def consumer(name, options = {}, &block)
+      def consumer(name, options = {}, &)
         options = _apply_execution_context(options)
         options[:stage_type] = :consumer
-        @pipeline.add_stage(:stage, name, options, &block)
+        @pipeline.add_stage(:stage, name, options, &)
       end
 
       # Processor - alias for consumer (both receive item and output)
       alias_method :processor, :consumer
 
       # Generic stage - for advanced use (input loop), receives input and output queues
-      def stage(name, options = {}, &block)
+      def stage(name, options = {}, &)
         options = _apply_execution_context(options)
         options[:stage_type] = :stage
-        @pipeline.add_stage(:stage, name, options, &block)
+        @pipeline.add_stage(:stage, name, options, &)
       end
 
       # Custom stage - for using custom Stage subclasses
@@ -255,46 +255,46 @@ module Minigun
       end
 
       # Accumulator is special - kept explicit
-      def accumulator(name = :accumulator, options = {}, &block)
+      def accumulator(name = :accumulator, options = {}, &)
         options = _apply_execution_context(options)
-        @pipeline.add_stage(:accumulator, name, options, &block)
+        @pipeline.add_stage(:accumulator, name, options, &)
       end
 
-      def before_run(&block)
-        @pipeline.add_hook(:before_run, &block)
+      def before_run(&)
+        @pipeline.add_hook(:before_run, &)
       end
 
-      def after_run(&block)
-        @pipeline.add_hook(:after_run, &block)
+      def after_run(&)
+        @pipeline.add_hook(:after_run, &)
       end
 
-      def after_producer(&block)
-        @pipeline.add_hook(:after_producer, &block)
+      def after_producer(&)
+        @pipeline.add_hook(:after_producer, &)
       end
 
-      def before_fork(stage_name = nil, &block)
+      def before_fork(stage_name = nil, &)
         if stage_name
-          @pipeline.add_stage_hook(:before_fork, stage_name, &block)
+          @pipeline.add_stage_hook(:before_fork, stage_name, &)
         else
-          @pipeline.add_hook(:before_fork, &block)
+          @pipeline.add_hook(:before_fork, &)
         end
       end
 
-      def after_fork(stage_name = nil, &block)
+      def after_fork(stage_name = nil, &)
         if stage_name
-          @pipeline.add_stage_hook(:after_fork, stage_name, &block)
+          @pipeline.add_stage_hook(:after_fork, stage_name, &)
         else
-          @pipeline.add_hook(:after_fork, &block)
+          @pipeline.add_hook(:after_fork, &)
         end
       end
 
       # Stage-specific hooks (Option 2)
-      def before(stage_name, &block)
-        @pipeline.add_stage_hook(:before, stage_name, &block)
+      def before(stage_name, &)
+        @pipeline.add_stage_hook(:before, stage_name, &)
       end
 
-      def after(stage_name, &block)
-        @pipeline.add_stage_hook(:after, stage_name, &block)
+      def after(stage_name, &)
+        @pipeline.add_stage_hook(:after, stage_name, &)
       end
 
       # Routing
@@ -304,10 +304,10 @@ module Minigun
 
       private
 
-      def _with_execution_context(context, &block)
+      def _with_execution_context(context, &)
         _execution_context_stack.push(context)
         begin
-          instance_eval(&block)
+          instance_eval(&)
         ensure
           _execution_context_stack.pop
         end

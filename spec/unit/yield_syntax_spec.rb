@@ -6,7 +6,7 @@ RSpec.describe 'Yield Syntax Support' do
   describe 'ProducerStage with yield' do
     it 'supports call method with output parameter' do
       class YieldProducerWithOutput < Minigun::ProducerStage
-        def call(output)
+        def call(_output)
           3.times { |i| yield i }
         end
       end
@@ -64,7 +64,7 @@ RSpec.describe 'Yield Syntax Support' do
   describe 'ConsumerStage with yield' do
     it 'supports call method with item and output parameters' do
       class YieldConsumerWithBoth < Minigun::ConsumerStage
-        def call(item, output)
+        def call(item, _output)
           yield(item * 2)
         end
       end
@@ -129,7 +129,7 @@ RSpec.describe 'Yield Syntax Support' do
         attr_reader :items_received
 
         def initialize(**args)
-          super(**args)
+          super
           @items_received = []
           @mutex = Mutex.new
         end
@@ -166,10 +166,11 @@ RSpec.describe 'Yield Syntax Support' do
   describe 'Base Stage with yield' do
     it 'supports loop-based stage with call method' do
       class YieldLoopStage < Minigun::Stage
-        def call(input_queue, output_queue)
+        def call(input_queue, _output_queue)
           loop do
             item = input_queue.pop
             break if item.is_a?(Minigun::AllUpstreamsDone)
+
             yield(item * 3)
           end
         end
@@ -205,7 +206,7 @@ RSpec.describe 'Yield Syntax Support' do
     # This is tracked separately as a general dynamic routing limitation
     xit 'supports yield(item, to: :stage_name)' do
       class YieldRouterStage < Minigun::ConsumerStage
-        def call(item, output)
+        def call(item, _output)
           if item.even?
             yield(item, to: :even_processor)
           else
@@ -295,4 +296,3 @@ RSpec.describe 'Yield Syntax Support' do
     end
   end
 end
-

@@ -46,17 +46,17 @@ module Minigun
     end
 
     # Add a stage to the implicit pipeline (for backward compatibility)
-    def add_stage(type, stage_name, options = {}, &block)
-      @root_pipeline.add_stage(type, stage_name, options, &block)
+    def add_stage(type, stage_name, options = {}, &)
+      @root_pipeline.add_stage(type, stage_name, options, &)
     end
 
     # Add a hook to the implicit pipeline (for backward compatibility)
-    def add_hook(type, &block)
-      @root_pipeline.add_hook(type, &block)
+    def add_hook(type, &)
+      @root_pipeline.add_hook(type, &)
     end
 
     # Add a nested pipeline as a stage within the implicit pipeline
-    def add_nested_pipeline(name, options = {}, &block)
+    def add_nested_pipeline(name, options = {}, &)
       # Create a PipelineStage and configure it
       pipeline_stage = PipelineStage.new(name: name, options: options)
 
@@ -67,7 +67,7 @@ module Minigun
       # Add stages to the nested pipeline via block
       if block_given?
         dsl = Minigun::DSL::PipelineDSL.new(nested_pipeline)
-        dsl.instance_eval(&block)
+        dsl.instance_eval(&)
       end
 
       # Add the pipeline stage to the implicit pipeline
