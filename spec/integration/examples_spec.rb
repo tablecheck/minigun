@@ -3,6 +3,42 @@
 require 'spec_helper'
 
 RSpec.describe 'Examples Integration' do
+  describe '000_new_dsl.rb' do
+    it 'demonstrates new DSL with multi-pipeline' do
+      load File.expand_path('../../examples/000_new_dsl.rb', __dir__)
+
+      example = NewDslExample.new
+      example.run
+
+      expect(example.results.size).to eq(5)
+      expect(example.results.sort).to eq([2, 4, 6, 8, 10])
+    end
+  end
+
+  describe '000_new_dsl_fixed.rb' do
+    it 'demonstrates fixed new DSL with multi-pipeline' do
+      load File.expand_path('../../examples/000_new_dsl_fixed.rb', __dir__)
+
+      example = NewDslExample.new
+      example.run
+
+      expect(example.results.size).to eq(5)
+      expect(example.results.sort).to eq([2, 4, 6, 8, 10])
+    end
+  end
+
+  describe '000_new_dsl_simple.rb' do
+    it 'demonstrates simple new DSL with single pipeline' do
+      load File.expand_path('../../examples/000_new_dsl_simple.rb', __dir__)
+
+      example = SimpleDslExample.new
+      example.run
+
+      expect(example.results.size).to eq(5)
+      expect(example.results.sort).to eq([2, 4, 6, 8, 10])
+    end
+  end
+
   describe '00_quick_start.rb' do
     it 'runs simple producer-processor-consumer pipeline' do
       load File.expand_path('../../examples/00_quick_start.rb', __dir__)
@@ -1021,11 +1057,24 @@ RSpec.describe 'Examples Integration' do
     end
   end
 
+  describe '99_test_mixed.rb' do
+    it 'demonstrates mixed pipeline configurations with routing' do
+      load File.expand_path('../../examples/99_test_mixed.rb', __dir__)
+
+      example = TestMixedExample.new
+      example.run
+
+      expect(example.from_a.sort).to eq([0, 1, 2])
+      expect(example.from_b.sort).to eq([0, 1, 2])
+      expect(example.final.sort).to eq([0, 1, 10, 20, 101, 201])
+    end
+  end
+
   # Coverage check: ensure all example files have tests
   describe 'Example Coverage' do
     it 'has tests for all example files' do
       examples_dir = File.expand_path('../../examples', __dir__)
-      all_files = Dir.glob(File.join(examples_dir, '*.rb')).map do |path|
+      example_files = Dir.glob(File.join(examples_dir, '*.rb')).map do |path|
         File.basename(path)
       end
 
