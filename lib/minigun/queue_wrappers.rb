@@ -95,5 +95,19 @@ module Minigun
         stage_stats: @stage_stats
       )
     end
+
+    # Convert to proc for yield syntax
+    # Allows: yield(item) or yield(item, to: :stage_name)
+    def to_proc
+      @to_proc ||= proc do |item, to: nil|
+        if to
+          # Route to specific stage
+          self.to(to) << item
+        else
+          # Route to all downstream stages
+          self << item
+        end
+      end
+    end
   end
 end

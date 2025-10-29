@@ -13,6 +13,10 @@ add to architecture
 
 ========================================================================================
 
+yield instead of |output|
+
+=============================================
+
 Support Cross-Pipeline Routing?
 - use stage identifiers instead of names?
 - Yes! We'd need to:

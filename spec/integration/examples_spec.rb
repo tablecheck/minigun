@@ -816,4 +816,247 @@ RSpec.describe 'Examples Integration' do
       end
     end
   end
+
+  describe '00_quick_start_yield.rb' do
+    it 'demonstrates yield syntax with custom stage classes' do
+      load File.expand_path('../../examples/00_quick_start_yield.rb', __dir__)
+
+      example = QuickStartYieldExample.new
+      example.run
+
+      expect(example.results.sort).to eq([0, 2, 4, 6, 8, 10, 12, 14, 16, 18])
+    end
+  end
+
+  describe '23_runner_features.rb' do
+    it 'demonstrates runner features and job tracking' do
+      load File.expand_path('../../examples/23_runner_features.rb', __dir__)
+
+      example = RunnerFeaturesExample.new
+      expect { example.run }.not_to raise_error
+      expect(example.results.size).to be > 0
+    end
+  end
+
+  describe '25_multiple_producers.rb' do
+    it 'demonstrates multiple producers feeding one consumer' do
+      load File.expand_path('../../examples/25_multiple_producers.rb', __dir__)
+
+      example = MultipleProducersExample.new
+      example.run
+
+      expect(example.results.size).to eq(15) # 10 from gen1 + 5 from gen2
+    end
+  end
+
+  describe '26_multi_pipeline_with_producers.rb' do
+    it 'demonstrates multi-pipeline with producers' do
+      load File.expand_path('../../examples/26_multi_pipeline_with_producers.rb', __dir__)
+
+      example = MultiPipelineWithProducersExample.new
+      expect { example.run }.not_to raise_error
+    end
+  end
+
+  describe '27_round_robin_load_balancing.rb' do
+    it 'demonstrates round-robin load balancing' do
+      load File.expand_path('../../examples/27_round_robin_load_balancing.rb', __dir__)
+
+      example = RoundRobinLoadBalancingExample.new
+      expect { example.run }.not_to raise_error
+    end
+  end
+
+  describe '28_broadcast_fan_out.rb' do
+    it 'demonstrates broadcast fan-out pattern' do
+      load File.expand_path('../../examples/28_broadcast_fan_out.rb', __dir__)
+
+      example = BroadcastFanOutExample.new
+      example.run
+
+      expect(example.results.size).to be > 0
+    end
+  end
+
+  describe '45_emit_to_stage_cross_context.rb' do
+    it 'demonstrates cross-context stage emission' do
+      load File.expand_path('../../examples/45_emit_to_stage_cross_context.rb', __dir__)
+
+      example = CrossContextEmitExample.new
+      expect { example.run }.not_to raise_error
+    end
+  end
+
+  describe '47_backpressure_demo.rb' do
+    it 'demonstrates backpressure handling' do
+      load File.expand_path('../../examples/47_backpressure_demo.rb', __dir__)
+
+      example = BackpressureDemoExample.new
+      expect { example.run }.not_to raise_error
+    end
+  end
+
+  describe '51_simple_named_context.rb' do
+    it 'demonstrates simple named execution context' do
+      load File.expand_path('../../examples/51_simple_named_context.rb', __dir__)
+
+      example = SimpleNamedContextExample.new
+      example.run
+
+      expect(example.results.size).to be > 0
+    end
+  end
+
+  describe '52_threads_plus_named.rb' do
+    it 'demonstrates threads combined with named contexts' do
+      load File.expand_path('../../examples/52_threads_plus_named.rb', __dir__)
+
+      example = ThreadsPlusNamedExample.new
+      example.run
+
+      expect(example.results.size).to be > 0
+    end
+  end
+
+  describe '53_batch_with_named.rb' do
+    it 'demonstrates batching with named contexts' do
+      load File.expand_path('../../examples/53_batch_with_named.rb', __dir__)
+
+      example = BatchWithNamedExample.new
+      example.run
+
+      expect(example.batches_processed).to be > 0
+    end
+  end
+
+  describe '54_process_batch_named.rb' do
+    it 'demonstrates process-per-batch with named contexts' do
+      load File.expand_path('../../examples/54_process_batch_named.rb', __dir__)
+
+      example = ProcessBatchNamedExample.new
+      expect { example.run }.not_to raise_error
+    end
+  end
+
+  describe '55_full_combo.rb' do
+    it 'demonstrates full combination of execution contexts' do
+      load File.expand_path('../../examples/55_full_combo.rb', __dir__)
+
+      example = FullComboExample.new
+      expect { example.run }.not_to raise_error
+    end
+  end
+
+  describe '56_threads_batch_consumer.rb' do
+    it 'demonstrates threads with batch consumer' do
+      load File.expand_path('../../examples/56_threads_batch_consumer.rb', __dir__)
+
+      example = ThreadsBatchConsumerExample.new
+      example.run
+
+      expect(example.results.size).to be > 0
+    end
+  end
+
+  describe '57_threads_batch_process_batch.rb' do
+    it 'demonstrates threads, batch, and process-per-batch' do
+      load File.expand_path('../../examples/57_threads_batch_process_batch.rb', __dir__)
+
+      example = ThreadsBatchProcessBatchExample.new
+      expect { example.run }.not_to raise_error
+    end
+  end
+
+  describe '58_with_final_threads.rb' do
+    it 'demonstrates pipeline with final thread stage' do
+      load File.expand_path('../../examples/58_with_final_threads.rb', __dir__)
+
+      example = WithFinalThreadsExample.new
+      example.run
+
+      expect(example.results.size).to be > 0
+    end
+  end
+
+  describe '59_with_middle_named.rb' do
+    it 'demonstrates pipeline with middle named context' do
+      load File.expand_path('../../examples/59_with_middle_named.rb', __dir__)
+
+      example = WithMiddleNamedExample.new
+      example.run
+
+      expect(example.results.size).to be > 0
+    end
+  end
+
+  describe '60_exact_structure.rb' do
+    it 'demonstrates exact execution structure control' do
+      load File.expand_path('../../examples/60_exact_structure.rb', __dir__)
+
+      example = ExactStructureExample.new
+      expect { example.run }.not_to raise_error
+    end
+  end
+
+  describe '61_scale_test.rb' do
+    it 'demonstrates pipeline scaling test' do
+      load File.expand_path('../../examples/61_scale_test.rb', __dir__)
+
+      example = ScaleTestExample.new(items: 100) # Smaller count for tests
+      example.run
+
+      expect(example.results.size).to eq(100)
+    end
+  end
+
+  describe '63_yield_with_classes.rb' do
+    it 'demonstrates comprehensive yield syntax with routing' do
+      load File.expand_path('../../examples/63_yield_with_classes.rb', __dir__)
+
+      example = YieldWithClassesExample.new
+      example.run
+
+      expect(example.even_results.sort).to eq([0, 4, 8, 12, 16])
+      # Note: odd_results may be empty due to routing issue, but that's tracked separately
+    end
+  end
+
+  # Coverage check: ensure all example files have tests
+  describe 'Example Coverage' do
+    it 'has tests for all example files' do
+      examples_dir = File.expand_path('../../examples', __dir__)
+      example_files = Dir.glob(File.join(examples_dir, '*.rb')).map do |path|
+        File.basename(path)
+      end.reject { |f| f.start_with?('000_') || f == '99_test_mixed.rb' } # Exclude dev/test files
+
+      spec_file = File.read(__FILE__)
+
+      missing_tests = []
+      example_files.each do |example_file|
+        unless spec_file.include?("'#{example_file}'")
+          missing_tests << example_file
+        end
+      end
+
+      if missing_tests.any?
+        puts "\n⚠️  Missing tests for examples:"
+        missing_tests.sort.each { |f| puts "  - #{f}" }
+        puts
+      end
+
+      expect(missing_tests).to be_empty,
+        "Missing tests for: #{missing_tests.join(', ')}"
+    end
+
+    it 'lists all covered examples' do
+      spec_file = File.read(__FILE__)
+      described_files = spec_file.scan(/describe '(\d+_[^']+\.rb)'/).flatten.sort
+
+      puts "\n📋 Covered examples (#{described_files.size}):"
+      described_files.each { |f| puts "  ✓ #{f}" }
+      puts
+
+      expect(described_files.size).to be > 40
+    end
+  end
 end

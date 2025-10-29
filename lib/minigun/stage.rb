@@ -48,9 +48,11 @@ module Minigun
     # Execute the stage with the given context
     # For loop-based stages, this receives input_queue and output_queue
     def execute(context, input_queue: nil, output_queue: nil)
-      return unless @block
-
-      context.instance_exec(input_queue, output_queue, &@block)
+      if @block
+        context.instance_exec(input_queue, output_queue, &@block)
+      elsif respond_to?(:call)
+        call_with_arity(input_queue, output_queue, &output_queue.to_proc)
+      end
     end
 
     # Run the worker loop for loop-based stages
@@ -121,14 +123,22 @@ module Minigun
         stage_ctx.stage_input_queues[target] << Message.end_signal(source: stage_ctx.stage_name)
       end
     end
+
+    # Call the stage's #call method with appropriate args based on arity
+    def call_with_arity(*args, &)
+      arity = method(:call).arity.abs
+      call(*args[...arity], &)
+    end
   end
 
   # Producer stage - executes once, no input
   class ProducerStage < Stage
     def execute(context, item: nil, input_queue: nil, output_queue: nil) # rubocop:disable Lint/UnusedMethodArgument
-      return unless @block
-
-      context.instance_exec(output_queue, &@block)
+      if @block
+        context.instance_exec(output_queue, &@block)
+      elsif respond_to?(:call)
+        call_with_arity(output_queue, &output_queue.to_proc)
+      end
     end
 
     def log_type
@@ -202,9 +212,11 @@ module Minigun
   # Consumer/Processor stage - loops on input, processes items
   class ConsumerStage < Stage
     def execute(context, item: nil, input_queue: nil, output_queue: nil) # rubocop:disable Lint/UnusedMethodArgument
-      return unless @block
-
-      context.instance_exec(item, output_queue, &@block)
+      if @block
+        context.instance_exec(item, output_queue, &@block)
+      elsif respond_to?(:call)
+        call_with_arity(item, output_queue, &output_queue.to_proc)
+      end
     end
 
     def run_worker_loop(stage_ctx)
