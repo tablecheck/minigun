@@ -213,10 +213,18 @@ module Minigun
       # Consumer stages pop from input_queue and process items
       loop do
         item = input_queue.pop
+        
+        puts "[ConsumerStage:#{name}] Popped: #{item.inspect}" if name == :_entrance
 
         # Handle END signal or AllUpstreamsDone
-        break if item.is_a?(AllUpstreamsDone)
-        break if item.is_a?(Message) && item.end_of_stream?
+        if item.is_a?(AllUpstreamsDone)
+          puts "[ConsumerStage:#{name}] Received AllUpstreamsDone" if name == :_entrance
+          break
+        end
+        if item.is_a?(Message) && item.end_of_stream?
+          puts "[ConsumerStage:#{name}] Received END signal from #{item.source}" if name == :_entrance
+          break
+        end
 
         # Execute the block or call method with the item, tracking per-item latency
         begin
@@ -425,152 +433,41 @@ module Minigun
 
   # Stage that wraps and executes a nested pipeline
   class PipelineStage < Stage
-    attr_reader :pipeline, :stages_to_add
+    attr_reader :pipeline
 
     def initialize(name:, options: {})
       super
-
-      # PipelineStage wraps a Pipeline instance for execution
-      # We'll inject the pipeline later when we have the config
       @pipeline = nil
-      @stages_to_add = [] # Queue of stages to add when pipeline is created
+    end
+
+    # Inject the pipeline instance
+    def pipeline=(pipeline)
+      @pipeline = pipeline
     end
 
     def run_mode
       :composite # Manages internal stages
     end
 
-    # Execute method for PipelineStage - handles both producer and consumer modes
-    def execute(context, input_queue, output_queue, stage_stats)
-      # If no pipeline set, pass items through unchanged
-      # TODO: possibly we can skip this case, need to check if it ever happens
-      unless @pipeline
-        return if input_queue.nil? # Producer mode with no pipeline - nothing to do
-
-        loop do
-          item = input_queue.pop
-          break if item.is_a?(AllUpstreamsDone)
-          break if item.is_a?(Message) && item.end_of_stream?
-          output_queue << item if output_queue
-        end
-        return
-      end
-
-      # Producer mode: input_queue is nil, run nested pipeline once and collect outputs
-      if input_queue.nil?
-        execute_as_producer(context, output_queue)
-        return
-      end
-
-      # Consumer mode: process items from input_queue through nested pipeline
-      loop do
-        item = input_queue.pop
-
-        # Handle END signal or AllUpstreamsDone
-        break if item.is_a?(AllUpstreamsDone)
-        break if item.is_a?(Message) && item.end_of_stream?
-
-        begin
-          start_time = Time.now if stage_stats
-
-          # Process item through the pipeline's stages sequentially (in-process, no full pipeline infrastructure)
-          current_items = [item]
-
-          @pipeline.stages.each_value do |stage|
-            # Only feed to streaming stages
-            next unless stage.run_mode == :streaming
-
-            break if current_items.empty?
-
-            next_items = []
-            current_items.each do |current_item|
-              # Create a temporary output queue for this stage
-              stage_output = []
-              stage_output.define_singleton_method(:<<) do |i|
-                push(i)
-                self
-              end
-
-              # Create a temporary input queue with just this item
-              temp_input = Queue.new
-              temp_input << current_item
-              temp_input << Message.end_signal(source: :temp)
-
-              # Execute stage with temporary queues (no stats for nested execution)
-              stage.execute(context, temp_input, stage_output, stage_stats)
-
-              # Collect outputs
-              next_items.concat(stage_output)
-            end
-            current_items = next_items
-          end
-
-          # Output final results to output queue
-          current_items.each { |result_item| output_queue << result_item } if output_queue
-
-          # Record per-item latency
-          stage_stats&.record_latency(Time.now - start_time)
-        rescue StandardError => e
-          # Log item-level errors but continue processing
-          Minigun.logger.error "[Stage:#{name}] Error processing item through nested pipeline: #{e.message}"
-          Minigun.logger.debug e.backtrace.join("\n") if Minigun.logger.debug?
-        end
-      end
-    end
-
-    # Run the worker loop for pipeline stages
+    # Run the nested pipeline when this stage is executed as a worker
     def run_worker_loop(stage_ctx)
-      stage_stats = stage_ctx.stage_stats
-      stage_stats.start!
-
-      stage_ctx.pipeline.send(:execute_stage_hooks, :before, stage_ctx.stage_name)
-
-      # Create queues (input_queue will be nil for producer mode)
-      input_queue = stage_ctx.sources_expected.empty? ? nil : create_input_queue(stage_ctx)
-      output_queue = create_output_queue(stage_ctx)
-
-      # Execute via executor (defines HOW: inline/threaded/process)
-      # For producer mode, input_queue is nil - execute() detects this and runs as producer
-      context = stage_ctx.pipeline.context
-      stage_ctx.executor.execute_stage(self, context, input_queue, output_queue, stage_stats)
-
-      stage_ctx.pipeline.send(:execute_stage_hooks, :after, stage_ctx.stage_name)
-    ensure
-      # Send END signals to all downstream targets
-      send_end_signals(stage_ctx)
-    end
-
-    # Execute as a producer - run the nested pipeline and collect its outputs
-    # Terminal stages automatically drain into :_exit collector added during DAG building
-    def execute_as_producer(context, output_queue)
       return unless @pipeline
 
-      # Set output_queues - the pipeline's DAG builder will add :_exit collector for terminal stages
-      @pipeline.instance_variable_set(:@output_queues, { output: output_queue }) if output_queue
-
-      # Run the nested pipeline - terminal stages will automatically route to :_exit which forwards to output_queue
-      @pipeline.run(context)
-    end
-
-    # Set the wrapped pipeline (called by Task)
-    def pipeline=(pipeline)
-      @pipeline = pipeline
-
-      # Add any queued stages
-      @stages_to_add.each do |stage_info|
-        @pipeline.add_stage(stage_info[:type], stage_info[:name], stage_info[:options], &stage_info[:block])
+      # Set up input/output queues for the nested pipeline
+      # The pipeline will create :_entrance and :_exit stages based on these
+      if stage_ctx.sources_expected.any?
+        # Has upstream: set input queue so pipeline creates :_entrance
+        @pipeline.instance_variable_set(:@input_queues, { input: stage_ctx.input_queue })
       end
-      @stages_to_add.clear
-    end
 
-    # Add a child stage to this pipeline
-    def add_stage(type, name, options = {}, &block)
-      if @pipeline
-        @pipeline.add_stage(type, name, options, &block)
-      else
-        # Queue for later when pipeline is set
-        @stages_to_add << { type: type, name: name, options: options, block: block }
-      end
+      # Always set output queue so pipeline creates :_exit
+      @pipeline.instance_variable_set(:@output_queues, { output: create_output_queue(stage_ctx) })
+
+      # Run the nested pipeline (it will automatically create :_entrance/:_exit as needed)
+      @pipeline.run(stage_ctx.pipeline.context)
+    ensure
+      # Send end signals to downstream stages in the parent pipeline
+      send_end_signals(stage_ctx)
     end
   end
 end

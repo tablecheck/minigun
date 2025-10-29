@@ -51,6 +51,9 @@ module Minigun
       # Only check streaming stages (autonomous and composite manage their own execution)
       return false unless @stage.run_mode == :streaming
 
+      # Skip special synthetic stages that connect to parent pipeline
+      return false if @stage_name == :_entrance
+
       # If no upstream sources, this stage is disconnected
       if stage_ctx.sources_expected.empty?
         log_info 'No upstream sources, sending END signals and exiting'

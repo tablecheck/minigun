@@ -13,10 +13,10 @@ RSpec.describe Minigun::PipelineStage do
     end
   end
 
-  describe '#composite?' do
-    it 'returns true' do
+  describe '#run_mode' do
+    it 'returns :composite' do
       stage = described_class.new(name: :my_pipeline)
-      expect(stage).to be_a(described_class)
+      expect(stage.run_mode).to eq(:composite)
     end
   end
 
@@ -30,308 +30,164 @@ RSpec.describe Minigun::PipelineStage do
       expect(stage.pipeline).to eq(pipeline)
     end
 
-    it 'adds queued stages to the pipeline' do
+    it 'allows setting pipeline to nil' do
       stage = described_class.new(name: :my_pipeline)
-
-      # Queue stages before pipeline exists
-      stage.add_stage(:producer, :source) { emit(1) }
-      stage.add_stage(:consumer, :sink) { |item| item * 2 }
-
-      # Now create and attach pipeline
       pipeline = Minigun::Pipeline.new(:test, config)
       stage.pipeline = pipeline
 
-      expect(pipeline.stages.keys).to include(:source, :sink)
+      stage.pipeline = nil
+
+      expect(stage.pipeline).to be_nil
     end
   end
 
-  describe '#add_stage' do
-    it 'queues stages when pipeline is not yet set' do
+  describe '#run_worker_loop' do
+    it 'returns early if no pipeline is set' do
       stage = described_class.new(name: :my_pipeline)
+      stage_ctx = instance_double(Minigun::StageContext,
+                                  pipeline: instance_double(Minigun::Pipeline, context: Object.new),
+                                  sources_expected: Set.new,
+                                  input_queue: Queue.new,
+                                  dag: instance_double(Minigun::DAG, downstream: []),
+                                  stage_input_queues: {},
+                                  runtime_edges: {},
+                                  stage_name: :my_pipeline)
 
-      stage.add_stage(:producer, :source) { emit(1) }
-
-      expect(stage.stages_to_add.size).to eq(1)
+      # Should not raise, just return
+      expect { stage.run_worker_loop(stage_ctx) }.not_to raise_error
     end
 
-    it 'adds stages directly when pipeline exists' do
+    it 'runs the nested pipeline when pipeline is set' do
       stage = described_class.new(name: :my_pipeline)
-      pipeline = Minigun::Pipeline.new(:test, config)
+      pipeline = instance_double(Minigun::Pipeline)
       stage.pipeline = pipeline
-
-      stage.add_stage(:producer, :source) { emit(1) }
-
-      expect(pipeline.stages[:source]).to be_a(Minigun::ProducerStage)
-    end
-  end
-
-  describe '#execute' do
-    it 'executes the pipeline stages inline and returns results' do
-      stage = described_class.new(name: :my_pipeline)
-      pipeline = Minigun::Pipeline.new(:test, config)
-      stage.pipeline = pipeline
-
-      # Add processor to pipeline (no consumer, so output is returned)
-      pipeline.add_stage(:processor, :double) { |item, output| output << (item * 2) }
 
       context = Object.new
-      input_queue = double('input_queue')
-      allow(input_queue).to receive(:pop).and_return(5, Minigun::AllUpstreamsDone.instance(:test))
+      parent_pipeline = instance_double(Minigun::Pipeline, context: context)
+      stage_ctx = instance_double(Minigun::StageContext,
+                                  pipeline: parent_pipeline,
+                                  sources_expected: Set.new,
+                                  input_queue: Queue.new,
+                                  dag: instance_double(Minigun::DAG, downstream: []),
+                                  stage_input_queues: {},
+                                  runtime_edges: {},
+                                  stage_name: :my_pipeline)
 
-      output_queue = []
-      output_queue.define_singleton_method(:<<) do |item|
-        push(item)
-        self
-      end
+      # Mock the output queue creation
+      allow(stage).to receive(:create_output_queue).and_return(Queue.new)
+      allow(stage).to receive(:send_end_signals)
 
-      stage.execute(context, input_queue, output_queue, nil)
+      # Expect pipeline.run to be called
+      expect(pipeline).to receive(:run).with(context)
 
-      # PipelineStage now pushes results to output queue
-      expect(output_queue).to include(10)
-    end
-  end
-
-  describe '#execute with queue-based DSL' do
-    let(:create_output_queue) do
-      [].tap do |arr|
-        arr.define_singleton_method(:<<) do |item|
-          push(item)
-          self
-        end
-      end
+      stage.run_worker_loop(stage_ctx)
     end
 
-    it 'returns the item unchanged if no pipeline is set' do
+    it 'sets input_queues when stage has upstream sources' do
       stage = described_class.new(name: :my_pipeline)
-      context = Object.new
-      input_queue = double('input_queue')
-      allow(input_queue).to receive(:pop).and_return(42, Minigun::AllUpstreamsDone.instance(:test))
-      output_queue = create_output_queue
-
-      stage.execute(context, input_queue, output_queue, nil)
-
-      expect(output_queue).to eq([42])
-    end
-
-    it 'processes item through pipeline stages sequentially' do
-      stage = described_class.new(name: :my_pipeline)
-      pipeline = Minigun::Pipeline.new(:test, config)
+      pipeline = instance_double(Minigun::Pipeline)
       stage.pipeline = pipeline
 
-      # Add stages that transform the item
-      pipeline.add_stage(:processor, :double) { |item, output| output << (item * 2) }
-      pipeline.add_stage(:processor, :add_ten) { |item, output| output << (item + 10) }
-
       context = Object.new
-      input_queue = double('input_queue')
-      allow(input_queue).to receive(:pop).and_return(5, Minigun::AllUpstreamsDone.instance(:test))
-      output_queue = create_output_queue
+      parent_pipeline = instance_double(Minigun::Pipeline, context: context)
+      input_queue = Queue.new
+      stage_ctx = instance_double(Minigun::StageContext,
+                                  pipeline: parent_pipeline,
+                                  sources_expected: Set.new([:upstream]),
+                                  input_queue: input_queue,
+                                  dag: instance_double(Minigun::DAG, downstream: []),
+                                  stage_input_queues: {},
+                                  runtime_edges: {},
+                                  stage_name: :my_pipeline)
 
-      stage.execute(context, input_queue, output_queue, nil)
+      allow(stage).to receive(:create_output_queue).and_return(Queue.new)
+      allow(stage).to receive(:send_end_signals)
+      allow(pipeline).to receive(:run)
 
-      # 5 * 2 = 10, then 10 + 10 = 20
-      expect(output_queue).to eq([20])
+      # Expect input_queues to be set on the nested pipeline
+      expect(pipeline).to receive(:instance_variable_set).with(:@input_queues, { input: input_queue })
+      expect(pipeline).to receive(:instance_variable_set).with(:@output_queues, anything)
+
+      stage.run_worker_loop(stage_ctx)
     end
 
-    it 'skips producer stages' do
+    it 'always sets output_queues' do
       stage = described_class.new(name: :my_pipeline)
-      pipeline = Minigun::Pipeline.new(:test, config)
+      pipeline = instance_double(Minigun::Pipeline)
       stage.pipeline = pipeline
 
-      # Add a producer (should be skipped) and a processor
-      pipeline.add_stage(:producer, :source) { |output| output << 999 }
-      pipeline.add_stage(:processor, :double) { |item, output| output << (item * 2) }
-
       context = Object.new
-      input_queue = double('input_queue')
-      allow(input_queue).to receive(:pop).and_return(5, Minigun::AllUpstreamsDone.instance(:test))
-      output_queue = create_output_queue
+      parent_pipeline = instance_double(Minigun::Pipeline, context: context)
+      output_queue = Queue.new
+      stage_ctx = instance_double(Minigun::StageContext,
+                                  pipeline: parent_pipeline,
+                                  sources_expected: Set.new,
+                                  input_queue: Queue.new,
+                                  dag: instance_double(Minigun::DAG, downstream: []),
+                                  stage_input_queues: {},
+                                  runtime_edges: {},
+                                  stage_name: :my_pipeline)
 
-      stage.execute(context, input_queue, output_queue, nil)
+      allow(stage).to receive(:create_output_queue).and_return(output_queue)
+      allow(stage).to receive(:send_end_signals)
+      allow(pipeline).to receive(:run)
 
-      # Should process 5, not 999 from producer
-      expect(output_queue).to eq([10])
+      # Expect output_queues to be set on the nested pipeline
+      expect(pipeline).to receive(:instance_variable_set).with(:@output_queues, { output: output_queue })
+
+      stage.run_worker_loop(stage_ctx)
     end
 
-    it 'processes through accumulator stages' do
+    it 'sends end signals to downstream stages after pipeline completes' do
       stage = described_class.new(name: :my_pipeline)
-      pipeline = Minigun::Pipeline.new(:test, config)
+      pipeline = instance_double(Minigun::Pipeline)
       stage.pipeline = pipeline
 
-      pipeline.add_stage(:processor, :double) { |item, output| output << (item * 2) }
-      pipeline.add_stage(:accumulator, :batch, max_size: 2) # Small batch for testing
-      pipeline.add_stage(:processor, :sum_batch) { |batch, output| output << batch.sum }
-
       context = Object.new
+      parent_pipeline = instance_double(Minigun::Pipeline, context: context)
+      stage_ctx = instance_double(Minigun::StageContext,
+                                  pipeline: parent_pipeline,
+                                  sources_expected: Set.new,
+                                  input_queue: Queue.new,
+                                  dag: instance_double(Minigun::DAG, downstream: []),
+                                  stage_input_queues: {},
+                                  runtime_edges: {},
+                                  stage_name: :my_pipeline)
 
-      # First item: buffered by accumulator
-      input_queue1 = double('input_queue1')
-      allow(input_queue1).to receive(:pop).and_return(5, Minigun::AllUpstreamsDone.instance(:test))
-      output_queue1 = create_output_queue
-      stage.execute(context, input_queue1, output_queue1, nil)
-      expect(output_queue1).to eq([]) # Nothing emitted yet
+      allow(stage).to receive(:create_output_queue).and_return(Queue.new)
+      allow(pipeline).to receive(:instance_variable_set)
+      allow(pipeline).to receive(:run)
 
-      # Second item: accumulator reaches batch size and emits
-      input_queue2 = double('input_queue2')
-      allow(input_queue2).to receive(:pop).and_return(3, Minigun::AllUpstreamsDone.instance(:test))
-      output_queue2 = create_output_queue
-      stage.execute(context, input_queue2, output_queue2, nil)
+      # Expect send_end_signals to be called after pipeline runs
+      expect(stage).to receive(:send_end_signals).with(stage_ctx)
 
-      # Accumulator emits [10, 6], sum_batch processes it: 10 + 6 = 16
-      expect(output_queue2).to eq([16])
+      stage.run_worker_loop(stage_ctx)
     end
 
-    it 'handles multiple outputs per stage' do
+    it 'sends end signals even if pipeline raises an error' do
       stage = described_class.new(name: :my_pipeline)
-      pipeline = Minigun::Pipeline.new(:test, config)
+      pipeline = instance_double(Minigun::Pipeline)
       stage.pipeline = pipeline
-
-      # Stage that outputs multiple items
-      pipeline.add_stage(:processor, :fan_out) do |item, output|
-        output << item
-        output << (item * 10)
-      end
 
       context = Object.new
-      input_queue = double('input_queue')
-      allow(input_queue).to receive(:pop).and_return(5, Minigun::AllUpstreamsDone.instance(:test))
-      output_queue = create_output_queue
+      parent_pipeline = instance_double(Minigun::Pipeline, context: context)
+      stage_ctx = instance_double(Minigun::StageContext,
+                                  pipeline: parent_pipeline,
+                                  sources_expected: Set.new,
+                                  input_queue: Queue.new,
+                                  dag: instance_double(Minigun::DAG, downstream: []),
+                                  stage_input_queues: {},
+                                  runtime_edges: {},
+                                  stage_name: :my_pipeline)
 
-      stage.execute(context, input_queue, output_queue, nil)
+      allow(stage).to receive(:create_output_queue).and_return(Queue.new)
+      allow(pipeline).to receive(:instance_variable_set)
+      allow(pipeline).to receive(:run).and_raise(StandardError, 'test error')
 
-      expect(output_queue).to contain_exactly(5, 50)
-    end
+      # Expect send_end_signals to be called even on error
+      expect(stage).to receive(:send_end_signals).with(stage_ctx)
 
-    it 'executes consumer stages but does not collect their output' do
-      stage = described_class.new(name: :my_pipeline)
-      pipeline = Minigun::Pipeline.new(:test, config)
-      stage.pipeline = pipeline
-
-      results = []
-      pipeline.add_stage(:processor, :double) { |item, output| output << (item * 2) }
-      pipeline.add_stage(:consumer, :collect) { |item| results << item }
-
-      context = Object.new
-      input_queue = double('input_queue')
-      allow(input_queue).to receive(:pop).and_return(5, Minigun::AllUpstreamsDone.instance(:test))
-      output_queue = create_output_queue
-
-      stage.execute(context, input_queue, output_queue, nil)
-
-      # Consumer executed (side effect)
-      expect(results).to eq([10])
-      # But nothing pushed to output queue after consumer
-      expect(output_queue).to eq([])
-    end
-
-    it 'handles empty results from stages' do
-      stage = described_class.new(name: :my_pipeline)
-      pipeline = Minigun::Pipeline.new(:test, config)
-      stage.pipeline = pipeline
-
-      # Stage that filters out items
-      pipeline.add_stage(:processor, :filter) do |item, output|
-        output << item if item > 10
-      end
-
-      context = Object.new
-      input_queue = double('input_queue')
-      allow(input_queue).to receive(:pop).and_return(5, Minigun::AllUpstreamsDone.instance(:test))
-      output_queue = create_output_queue
-
-      stage.execute(context, input_queue, output_queue, nil)
-
-      expect(output_queue).to eq([])
-    end
-
-    it 'chains multiple transformations correctly' do
-      stage = described_class.new(name: :my_pipeline)
-      pipeline = Minigun::Pipeline.new(:test, config)
-      stage.pipeline = pipeline
-
-      pipeline.add_stage(:processor, :double) { |item, output| output << (item * 2) }
-      pipeline.add_stage(:processor, :square) { |item, output| output << (item**2) }
-      pipeline.add_stage(:processor, :add_one) { |item, output| output << (item + 1) }
-
-      context = Object.new
-      input_queue = double('input_queue')
-      allow(input_queue).to receive(:pop).and_return(3, Minigun::AllUpstreamsDone.instance(:test))
-      output_queue = create_output_queue
-
-      stage.execute(context, input_queue, output_queue, nil)
-
-      # 3 * 2 = 6, 6^2 = 36, 36 + 1 = 37
-      expect(output_queue).to eq([37])
-    end
-
-    it 'skips nested PipelineStages' do
-      stage = described_class.new(name: :outer)
-      pipeline = Minigun::Pipeline.new(:outer, config)
-      stage.pipeline = pipeline
-
-      # Add a nested pipeline stage
-      inner_stage = described_class.new(name: :inner)
-      inner_pipeline = Minigun::Pipeline.new(:inner, config)
-      inner_stage.pipeline = inner_pipeline
-      pipeline.stages[:inner] = inner_stage
-
-      pipeline.add_stage(:processor, :double) { |item, output| output << (item * 2) }
-
-      context = Object.new
-      input_queue = double('input_queue')
-      allow(input_queue).to receive(:pop).and_return(5, Minigun::AllUpstreamsDone.instance(:test))
-      output_queue = create_output_queue
-
-      stage.execute(context, input_queue, output_queue, nil)
-
-      # Should skip nested pipeline, only run double
-      expect(output_queue).to eq([10])
-    end
-
-    it 'handles stages that output nothing' do
-      stage = described_class.new(name: :my_pipeline)
-      pipeline = Minigun::Pipeline.new(:test, config)
-      stage.pipeline = pipeline
-
-      # Stage that never outputs
-      pipeline.add_stage(:processor, :black_hole) { |_item, _output| nil }
-
-      context = Object.new
-      input_queue = double('input_queue')
-      allow(input_queue).to receive(:pop).and_return(5, Minigun::AllUpstreamsDone.instance(:test))
-      output_queue = create_output_queue
-
-      stage.execute(context, input_queue, output_queue, nil)
-
-      expect(output_queue).to eq([])
-    end
-
-    it 'preserves context instance variables across stages' do
-      stage = described_class.new(name: :my_pipeline)
-      pipeline = Minigun::Pipeline.new(:test, config)
-      stage.pipeline = pipeline
-
-      context = Class.new do
-        attr_accessor :tracking
-
-        def initialize
-          @tracking = []
-        end
-      end.new
-
-      pipeline.add_stage(:processor, :track_and_double) do |item, output|
-        tracking << "saw #{item}"
-        output << (item * 2)
-      end
-
-      input_queue = double('input_queue')
-      allow(input_queue).to receive(:pop).and_return(5, Minigun::AllUpstreamsDone.instance(:test))
-      output_queue = create_output_queue
-
-      stage.execute(context, input_queue, output_queue, nil)
-
-      expect(output_queue).to eq([10])
-      expect(context.tracking).to eq(['saw 5'])
+      expect { stage.run_worker_loop(stage_ctx) }.to raise_error(StandardError, 'test error')
     end
   end
 end

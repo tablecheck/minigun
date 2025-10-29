@@ -226,6 +226,12 @@ module Minigun
         # Skip autonomous stages - they don't have input queues
         next if stage.run_mode == :autonomous
 
+        # Special case: :_entrance uses the parent pipeline's input queue
+        if stage_name == :_entrance && @input_queues && @input_queues[:input]
+          queues[stage_name] = @input_queues[:input]
+          next
+        end
+
         # Use stage's queue_size setting (bounded SizedQueue or unbounded Queue)
         size = stage.queue_size
         queues[stage_name] = if size.nil?
@@ -329,6 +335,9 @@ module Minigun
       fill_sequential_gaps_by_definition_order!
       puts "[DAG BUILD] AFTER fill_sequential_gaps: edges=#{@dag.edges.map { |k, v| "#{k}->#{v.to_a.join(',')}" }.join(' | ')}"
 
+      # If this pipeline has input_queues (nested pipeline), add :_entrance distributor
+      insert_entrance_distributor_for_inputs! if @input_queues && !@input_queues.empty?
+
       # If this pipeline has output_queues, add :_exit collector for terminal stages
       insert_exit_collector_for_outputs! if @output_queues && !@output_queues.empty?
 
@@ -403,6 +412,42 @@ module Minigun
 
         @dag.add_edge(stage_name, next_stage)
       end
+    end
+
+    # Insert an :_entrance distributor stage for nested pipelines
+    # This receives items from the parent pipeline and distributes to entry stages
+    def insert_entrance_distributor_for_inputs!
+      # Find stages that have no upstream (would be entry points)
+      entry_stages = @stages.keys.select do |stage_name|
+        stage = @stages[stage_name]
+        # Skip autonomous stages (they're producers)
+        next false if stage.run_mode == :autonomous
+        # Entry stages have no upstream
+        @dag.upstream(stage_name).empty?
+      end
+
+      return if entry_stages.empty?
+
+      # Create a consumer stage that reads from parent input and emits to nested pipeline
+      # Use ConsumerStage (not ProducerStage) so it properly tracks multiple END signals
+      parent_input = @input_queues[:input]
+      entrance_block = proc do |item, output|
+        # Just forward items from parent to nested pipeline
+        output << item
+      end
+      entrance_stage = Minigun::ConsumerStage.new(name: :_entrance, block: entrance_block, options: {})
+
+      # Add the :_entrance stage to the pipeline
+      @stages[:_entrance] = entrance_stage
+      @stage_order.unshift(:_entrance) # Add at beginning
+      @dag.add_node(:_entrance)
+
+      # Connect :_entrance to entry stages
+      entry_stages.each do |stage_name|
+        @dag.add_edge(:_entrance, stage_name)
+      end
+
+      log_info "[Pipeline:#{@name}] Added :_entrance distributor for entry stages: #{entry_stages.join(', ')}"
     end
 
     # Insert an :_exit collector stage that terminal stages drain into
