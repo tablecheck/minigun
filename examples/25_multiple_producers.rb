@@ -19,28 +19,28 @@ class MultipleProducersExample
     # Producer 1: Fetch from API
     producer :api_source do |output|
       puts '[API Source] Fetching from REST API...'
-      5.times do |i|
+      10.times do |i|
         output << { source: 'api', id: i, data: "API record #{i}" }
       end
-      puts '[API Source] Fetched 5 records'
+      puts '[API Source] Fetched 10 records'
     end
 
     # Producer 2: Read from database
     producer :db_source do |output|
       puts '[DB Source] Querying database...'
-      3.times do |i|
+      5.times do |i|
         output << { source: 'database', id: i + 100, data: "DB record #{i}" }
       end
-      puts '[DB Source] Queried 3 records'
+      puts '[DB Source] Queried 5 records'
     end
 
     # Producer 3: Read from file
     producer :file_source do |output|
       puts '[File Source] Reading from file...'
-      4.times do |i|
+      3.times do |i|
         output << { source: 'file', id: i + 200, data: "File record #{i}" }
       end
-      puts '[File Source] Read 4 records'
+      puts '[File Source] Read 3 records'
     end
 
     # Shared processor - enriches all records

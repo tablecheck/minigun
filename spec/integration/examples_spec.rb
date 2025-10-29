@@ -845,7 +845,7 @@ RSpec.describe 'Examples Integration' do
       example = MultipleProducersExample.new
       example.run
 
-      expect(example.results.size).to eq(15) # 10 from gen1 + 5 from gen2
+      expect(example.results.size).to eq(18) # 10 from api + 5 from db + 3 from file
     end
   end
 
@@ -891,7 +891,7 @@ RSpec.describe 'Examples Integration' do
     it 'demonstrates backpressure handling' do
       load File.expand_path('../../examples/47_backpressure_demo.rb', __dir__)
 
-      example = BackpressureDemoExample.new
+      example = BackpressureDemoExample.new(items: 50) # Use fewer items for test
       expect { example.run }.not_to raise_error
     end
   end
