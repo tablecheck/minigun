@@ -83,7 +83,7 @@ if __FILE__ == $PROGRAM_NAME
 
   puts "\n=== Results ===\n"
   puts 'Total items emitted by producer: 20'
-  puts "Items filtered out (multiples of 7): #{[7, 14].size}"
+  puts 'Items filtered out (multiples of 7): 2'
   puts "Items successfully processed: #{example.results.size}"
   puts "Expected: #{20 - 2} items (20 minus 2 filtered)"
   puts "Actual: #{example.results.size} items"

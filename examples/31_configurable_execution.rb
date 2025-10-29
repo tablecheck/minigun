@@ -212,27 +212,24 @@ class AdaptivePipeline
   def thread_count
     case @concurrency_level
     when :low then 10
-    when :medium then 50
     when :high then 200
-    else 50
+    else 50 # medium
     end
   end
 
   def process_count
     case @concurrency_level
     when :low then 2
-    when :medium then 4
     when :high then 16
-    else 4
+    else 4 # medium
     end
   end
 
   def batch_size
     case @concurrency_level
     when :low then 100
-    when :medium then 1000
     when :high then 10_000
-    else 1000
+    else 1000 # medium
     end
   end
 

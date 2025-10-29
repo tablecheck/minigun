@@ -48,8 +48,6 @@ class CrossContextEmitExample
     # This stage runs inline (default)
     processor :router do |task, output|
       target_stage = case task[:type]
-                     when 'fast'
-                       :fast_processor
                      when 'slow'
                        :slow_processor
                      when 'heavy'

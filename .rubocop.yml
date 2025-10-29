@@ -38,9 +38,16 @@ Metrics/ParameterLists:
 Metrics/PerceivedComplexity:
   Enabled: false
 
+Naming/VariableNumber:
+  Exclude:
+    - 'spec/**/*'
+
 Performance/CollectionLiteralInLoop:
   Exclude:
     - 'spec/**/*'
+
+RSpec/ContextWording:
+  Enabled: false
 
 RSpec/ExampleLength:
   Enabled: false
@@ -79,12 +86,12 @@ Style/Documentation:
 Style/ExplicitBlockArgument:
   Enabled: false
 
+Style/HashLikeCase:
+  Exclude:
+    - 'examples/**/*'
+
 Style/ModuleFunction:
   EnforcedStyle: extend_self
 
 Style/NumericPredicate:
   Enabled: false
-
-Naming/VariableNumber:
-  Exclude:
-    - 'spec/**/*'

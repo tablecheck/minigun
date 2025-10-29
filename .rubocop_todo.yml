@@ -6,19 +6,6 @@
 # Note that changes in the inspected code, or installation of new
 # versions of RuboCop, may require this file to be generated again.
 
-# Offense count: 4
-# Configuration parameters: IgnoreLiteralBranches, IgnoreConstantBranches, IgnoreDuplicateElseBranch.
-Lint/DuplicateBranch:
-  Exclude:
-    - 'examples/31_configurable_execution.rb'
-    - 'examples/45_emit_to_stage_cross_context.rb'
-
-# Offense count: 3
-# Configuration parameters: AllowedParentClasses.
-Lint/MissingSuper:
-  Exclude:
-    - 'lib/minigun/execution/executor.rb'
-
 # Offense count: 30
 # Configuration parameters: CountComments, CountAsOne, AllowedMethods, AllowedPatterns, inherit_mode.
 # AllowedMethods: refine
@@ -26,21 +13,9 @@ Metrics/BlockLength:
   Max: 109
 
 # Offense count: 1
-Performance/FixedSize:
-  Exclude:
-    - 'examples/13_configuration.rb'
-
-# Offense count: 1
 RSpec/AnyInstance:
   Exclude:
     - 'spec/unit/execution/worker_spec.rb'
-
-# Offense count: 2
-# Configuration parameters: Prefixes, AllowedPatterns.
-# Prefixes: when, with, without
-RSpec/ContextWording:
-  Exclude:
-    - 'spec/unit/queue_wrappers_spec.rb'
 
 # Offense count: 15
 # Configuration parameters: IgnoredMetadata.
@@ -114,10 +89,3 @@ RSpec/VerifiedDoubles:
     - 'spec/unit/execution/worker_spec.rb'
     - 'spec/unit/queue_wrappers_spec.rb'
     - 'spec/unit/runner_spec.rb'
-
-# Offense count: 6
-# Configuration parameters: MinBranchesCount.
-Style/HashLikeCase:
-  Exclude:
-    - 'examples/40_priority_routing.rb'
-    - 'examples/44_custom_batching.rb'

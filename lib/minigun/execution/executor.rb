@@ -75,6 +75,7 @@ module Minigun
       attr_reader :max_size
 
       def initialize(max_size:)
+        super()
         @max_size = max_size
         @active_threads = []
         @mutex = Mutex.new
@@ -118,6 +119,7 @@ module Minigun
       attr_reader :max_size
 
       def initialize(max_size:)
+        super()
         @max_size = max_size
         @active_pids = []
         @mutex = Mutex.new
@@ -210,6 +212,7 @@ module Minigun
     # Ractor pool executor - manages ractor execution
     class RactorPoolExecutor < Executor
       def initialize(max_size:)
+        super()
         @max_size = max_size
         @fallback = ThreadPoolExecutor.new(max_size: max_size)
       end
