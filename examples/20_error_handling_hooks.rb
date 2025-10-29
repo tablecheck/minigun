@@ -2,6 +2,7 @@
 
 require_relative '../lib/minigun'
 require 'tempfile'
+require 'json'
 
 # Example: Error Handling and Recovery with Hooks
 # Demonstrates error detection and handling patterns
