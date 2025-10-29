@@ -8,14 +8,22 @@ ADD to README / DOCS:
 - fan-in without fan-out (i.e. a producer connects to 1 consumer, even if MULTIPLE producers connect to that consumer) is done by directly having the producer insert to the consumer's queue
 - emit_to_stage emits DIRECTLY to the consumer input queue
 
+add to readme: Classes use yield instead of |output|
+
 add to architecture
 - multi-parents --> how do we know end of queues?
 
 ========================================================================================
 
-yield instead of |output|
+@stage_name == :_entrance and :_exit (YUCK)
 
 ====================
+
+cleanup signal
++ break if item.is_a?(AllUpstreamsDone)
++ break if item.is_a?(Message) && item.end_of_stream?
+
+==============================
 
 make per item latency tracking optional (and stats?)
 

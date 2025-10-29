@@ -213,18 +213,10 @@ module Minigun
       # Consumer stages pop from input_queue and process items
       loop do
         item = input_queue.pop
-        
-        puts "[ConsumerStage:#{name}] Popped: #{item.inspect}" if name == :_entrance
 
         # Handle END signal or AllUpstreamsDone
-        if item.is_a?(AllUpstreamsDone)
-          puts "[ConsumerStage:#{name}] Received AllUpstreamsDone" if name == :_entrance
-          break
-        end
-        if item.is_a?(Message) && item.end_of_stream?
-          puts "[ConsumerStage:#{name}] Received END signal from #{item.source}" if name == :_entrance
-          break
-        end
+        break if item.is_a?(AllUpstreamsDone)
+        break if item.is_a?(Message) && item.end_of_stream?
 
         # Execute the block or call method with the item, tracking per-item latency
         begin
@@ -457,7 +449,11 @@ module Minigun
       # The pipeline will create :_entrance and :_exit stages based on these
       if stage_ctx.sources_expected.any?
         # Has upstream: set input queue so pipeline creates :_entrance
-        @pipeline.instance_variable_set(:@input_queues, { input: stage_ctx.input_queue })
+        # Also pass the expected source count for proper END signal handling
+        @pipeline.instance_variable_set(:@input_queues, {
+          input: stage_ctx.input_queue,
+          sources_expected: stage_ctx.sources_expected
+        })
       end
 
       # Always set output queue so pipeline creates :_exit

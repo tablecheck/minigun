@@ -91,9 +91,10 @@ RSpec.describe Minigun::PipelineStage do
       context = Object.new
       parent_pipeline = instance_double(Minigun::Pipeline, context: context)
       input_queue = Queue.new
+      sources = Set.new([:upstream])
       stage_ctx = instance_double(Minigun::StageContext,
                                   pipeline: parent_pipeline,
-                                  sources_expected: Set.new([:upstream]),
+                                  sources_expected: sources,
                                   input_queue: input_queue,
                                   dag: instance_double(Minigun::DAG, downstream: []),
                                   stage_input_queues: {},
@@ -104,8 +105,11 @@ RSpec.describe Minigun::PipelineStage do
       allow(stage).to receive(:send_end_signals)
       allow(pipeline).to receive(:run)
 
-      # Expect input_queues to be set on the nested pipeline
-      expect(pipeline).to receive(:instance_variable_set).with(:@input_queues, { input: input_queue })
+      # Expect input_queues to be set on the nested pipeline with sources_expected
+      expect(pipeline).to receive(:instance_variable_set).with(
+        :@input_queues,
+        { input: input_queue, sources_expected: sources }
+      )
       expect(pipeline).to receive(:instance_variable_set).with(:@output_queues, anything)
 
       stage.run_worker_loop(stage_ctx)

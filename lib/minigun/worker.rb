@@ -78,6 +78,9 @@ module Minigun
       # Calculate sources for workers (empty for autonomous stages)
       sources_expected = if @stage.run_mode == :autonomous
                            Set.new
+                         elsif @stage_name == :_entrance && @pipeline.instance_variable_get(:@input_queues)
+                           # For :_entrance, use sources from parent pipeline if available
+                           @pipeline.instance_variable_get(:@input_queues)[:sources_expected] || Set.new
                          else
                            Set.new(dag.upstream(@stage_name))
                          end
