@@ -51,9 +51,6 @@ module Minigun
       # Only check streaming stages (autonomous and composite manage their own execution)
       return false unless @stage.run_mode == :streaming
 
-      # Skip special synthetic stages that connect to parent pipeline
-      return false if @stage_name == :_entrance
-
       # If no upstream sources, this stage is disconnected
       if stage_ctx.sources_expected.empty?
         log_info 'No upstream sources, sending END signals and exiting'
@@ -78,9 +75,9 @@ module Minigun
       # Calculate sources for workers (empty for autonomous stages)
       sources_expected = if @stage.run_mode == :autonomous
                            Set.new
-                         elsif @stage_name == :_entrance && @pipeline.instance_variable_get(:@input_queues)
+                         elsif @stage_name == :_entrance && @pipeline.input_queues
                            # For :_entrance, use sources from parent pipeline if available
-                           @pipeline.instance_variable_get(:@input_queues)[:sources_expected] || Set.new
+                           @pipeline.input_queues[:sources_expected] || Set.new
                          else
                            Set.new(dag.upstream(@stage_name))
                          end

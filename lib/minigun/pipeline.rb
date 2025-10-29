@@ -4,8 +4,8 @@ module Minigun
   # Pipeline represents a single data processing pipeline with stages
   # A Pipeline can be standalone or part of a multi-pipeline Task
   class Pipeline
-    attr_reader :name, :config, :stages, :hooks, :dag, :input_queue, :output_queues, :stage_order, :stats,
-                :context, :stage_hooks, :stage_input_queues, :runtime_edges
+    attr_reader :name, :config, :stages, :hooks, :dag, :output_queues, :stage_order, :stats,
+                :context, :stage_hooks, :stage_input_queues, :runtime_edges, :input_queues
 
     def initialize(name, config = {}, stages: nil, hooks: nil, stage_hooks: nil, dag: nil, stage_order: nil, stats: nil)
       @name = name
@@ -327,13 +327,10 @@ module Minigun
 
     def build_dag_routing!
       # Handle multiple producers specially - they should all connect to first non-producer
-      puts "[DAG BUILD] BEFORE handle_multiple_producers: edges=#{@dag.edges.map { |k, v| "#{k}->#{v.to_a.join(',')}" }.join(' | ')}"
       handle_multiple_producers_routing!
-      puts "[DAG BUILD] AFTER handle_multiple_producers: edges=#{@dag.edges.map { |k, v| "#{k}->#{v.to_a.join(',')}" }.join(' | ')}"
 
       # Fill any remaining sequential gaps (handles fan-out, siblings, cycles)
       fill_sequential_gaps_by_definition_order!
-      puts "[DAG BUILD] AFTER fill_sequential_gaps: edges=#{@dag.edges.map { |k, v| "#{k}->#{v.to_a.join(',')}" }.join(' | ')}"
 
       # If this pipeline has input_queues (nested pipeline), add :_entrance distributor
       insert_entrance_distributor_for_inputs! if @input_queues && !@input_queues.empty?
