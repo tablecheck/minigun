@@ -6,28 +6,12 @@
 # Note that changes in the inspected code, or installation of new
 # versions of RuboCop, may require this file to be generated again.
 
-# Offense count: 3
-# Configuration parameters: AllowedMethods.
-# AllowedMethods: enums
-Lint/ConstantDefinitionInBlock:
-  Exclude:
-    - 'spec/integration/dynamic_routing_end_signals_spec.rb'
-
 # Offense count: 4
 # Configuration parameters: IgnoreLiteralBranches, IgnoreConstantBranches, IgnoreDuplicateElseBranch.
 Lint/DuplicateBranch:
   Exclude:
     - 'examples/31_configurable_execution.rb'
     - 'examples/45_emit_to_stage_cross_context.rb'
-
-# Offense count: 7
-# Configuration parameters: AllowComments, AllowEmptyLambdas.
-Lint/EmptyBlock:
-  Exclude:
-    - 'spec/minigun/task_spec.rb'
-    - 'spec/unit/inheritance_spec.rb'
-    - 'spec/unit/stage_hooks_advanced_spec.rb'
-    - 'spec/unit/stage_hooks_spec.rb'
 
 # Offense count: 3
 # Configuration parameters: AllowedParentClasses.
@@ -82,6 +66,7 @@ RSpec/DescribeClass:
     - 'spec/unit/output_to_stage_spec.rb'
     - 'spec/unit/stage_hooks_advanced_spec.rb'
     - 'spec/unit/stage_hooks_spec.rb'
+    - 'spec/unit/yield_syntax_spec.rb'
 
 # Offense count: 8
 RSpec/ExpectOutput:

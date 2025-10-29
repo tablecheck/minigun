@@ -5,7 +5,7 @@ require 'spec_helper'
 RSpec.describe 'Yield Syntax Support' do
   describe 'ProducerStage with yield' do
     it 'supports call method with output parameter' do
-      class YieldProducerWithOutput < Minigun::ProducerStage
+      producer_stage = Class.new(Minigun::ProducerStage) do
         def call(_output)
           3.times { |i| yield i }
         end
@@ -19,9 +19,10 @@ RSpec.describe 'Yield Syntax Support' do
 
         define_method(:results) { results }
         define_method(:mutex) { mutex }
+        define_method(:producer_stage) { producer_stage }
 
         pipeline do
-          custom_stage(YieldProducerWithOutput, :generate)
+          custom_stage(producer_stage, :generate)
           consumer :collect do |item|
             mutex.synchronize { results << item }
           end
@@ -33,7 +34,7 @@ RSpec.describe 'Yield Syntax Support' do
     end
 
     it 'supports call method without parameters (arity 0)' do
-      class YieldProducerNoParams < Minigun::ProducerStage
+      producer_stage = Class.new(Minigun::ProducerStage) do
         def call
           3.times { |i| yield i }
         end
@@ -47,9 +48,10 @@ RSpec.describe 'Yield Syntax Support' do
 
         define_method(:results) { results }
         define_method(:mutex) { mutex }
+        define_method(:producer_stage) { producer_stage }
 
         pipeline do
-          custom_stage(YieldProducerNoParams, :generate)
+          custom_stage(producer_stage, :generate)
           consumer :collect do |item|
             mutex.synchronize { results << item }
           end
@@ -63,7 +65,7 @@ RSpec.describe 'Yield Syntax Support' do
 
   describe 'ConsumerStage with yield' do
     it 'supports call method with item and output parameters' do
-      class YieldConsumerWithBoth < Minigun::ConsumerStage
+      consumer_stage = Class.new(Minigun::ConsumerStage) do
         def call(item, _output)
           yield(item * 2)
         end
@@ -77,12 +79,13 @@ RSpec.describe 'Yield Syntax Support' do
 
         define_method(:results) { results }
         define_method(:mutex) { mutex }
+        define_method(:consumer_stage) { consumer_stage }
 
         pipeline do
           producer :generate do |output|
             3.times { |i| output << i }
           end
-          custom_stage(YieldConsumerWithBoth, :transform)
+          custom_stage(consumer_stage, :transform)
           consumer :collect do |item|
             mutex.synchronize { results << item }
           end
@@ -94,7 +97,7 @@ RSpec.describe 'Yield Syntax Support' do
     end
 
     it 'supports call method with only item parameter (arity 1)' do
-      class YieldConsumerItemOnly < Minigun::ConsumerStage
+      consumer_stage = Class.new(Minigun::ConsumerStage) do
         def call(item)
           yield(item * 2)
         end
@@ -108,12 +111,13 @@ RSpec.describe 'Yield Syntax Support' do
 
         define_method(:results) { results }
         define_method(:mutex) { mutex }
+        define_method(:consumer_stage) { consumer_stage }
 
         pipeline do
           producer :generate do |output|
             3.times { |i| output << i }
           end
-          custom_stage(YieldConsumerItemOnly, :transform)
+          custom_stage(consumer_stage, :transform)
           consumer :collect do |item|
             mutex.synchronize { results << item }
           end
@@ -125,7 +129,7 @@ RSpec.describe 'Yield Syntax Support' do
     end
 
     it 'supports terminal consumer with only item parameter' do
-      class YieldTerminalConsumer < Minigun::ConsumerStage
+      terminal_stage_class = Class.new(Minigun::ConsumerStage) do
         attr_reader :items_received
 
         def initialize(**args)
@@ -139,18 +143,16 @@ RSpec.describe 'Yield Syntax Support' do
         end
       end
 
-      terminal_stage = YieldTerminalConsumer.new(name: :terminal)
-
       example_class = Class.new do
         include Minigun::DSL
 
-        define_method(:terminal_stage) { terminal_stage }
+        define_method(:terminal_stage_class) { terminal_stage_class }
 
         pipeline do
           producer :generate do |output|
             3.times { |i| output << i }
           end
-          custom_stage(terminal_stage.class, :terminal)
+          custom_stage(terminal_stage_class, :terminal)
         end
       end
 
@@ -165,7 +167,7 @@ RSpec.describe 'Yield Syntax Support' do
 
   describe 'Base Stage with yield' do
     it 'supports loop-based stage with call method' do
-      class YieldLoopStage < Minigun::Stage
+      loop_stage = Class.new(Minigun::Stage) do
         def call(input_queue, _output_queue)
           loop do
             item = input_queue.pop
@@ -184,12 +186,13 @@ RSpec.describe 'Yield Syntax Support' do
 
         define_method(:results) { results }
         define_method(:mutex) { mutex }
+        define_method(:loop_stage) { loop_stage }
 
         pipeline do
           producer :generate do |output|
             3.times { |i| output << i }
           end
-          custom_stage(YieldLoopStage, :transform)
+          custom_stage(loop_stage, :transform)
           consumer :collect do |item|
             mutex.synchronize { results << item }
           end
@@ -204,8 +207,8 @@ RSpec.describe 'Yield Syntax Support' do
   describe 'yield with routing' do
     # Known limitation: stages with only dynamically-routed inputs don't wait for input
     # This is tracked separately as a general dynamic routing limitation
-    xit 'supports yield(item, to: :stage_name)' do
-      class YieldRouterStage < Minigun::ConsumerStage
+    it 'supports yield(item, to: :stage_name) - known limitation with dynamic routing', skip: 'Known limitation with dynamic routing' do
+      router_stage = Class.new(Minigun::ConsumerStage) do
         def call(item, _output)
           if item.even?
             yield(item, to: :even_processor)
@@ -215,13 +218,13 @@ RSpec.describe 'Yield Syntax Support' do
         end
       end
 
-      class YieldEvenProcessor < Minigun::ConsumerStage
+      even_processor_stage = Class.new(Minigun::ConsumerStage) do
         def call(item)
           yield(item * 2)
         end
       end
 
-      class YieldOddProcessor < Minigun::ConsumerStage
+      odd_processor_stage = Class.new(Minigun::ConsumerStage) do
         def call(item)
           yield(item * 3)
         end
@@ -237,14 +240,17 @@ RSpec.describe 'Yield Syntax Support' do
         define_method(:even_results) { even_results }
         define_method(:odd_results) { odd_results }
         define_method(:mutex) { mutex }
+        define_method(:router_stage) { router_stage }
+        define_method(:even_processor_stage) { even_processor_stage }
+        define_method(:odd_processor_stage) { odd_processor_stage }
 
         pipeline do
           producer :generate do |output|
             5.times { |i| output << i }
           end
-          custom_stage(YieldRouterStage, :router)
-          custom_stage(YieldEvenProcessor, :even_processor)
-          custom_stage(YieldOddProcessor, :odd_processor)
+          custom_stage(router_stage, :router)
+          custom_stage(even_processor_stage, :even_processor)
+          custom_stage(odd_processor_stage, :odd_processor)
           consumer :collect_even, from: :even_processor do |item|
             mutex.synchronize { even_results << item }
           end
@@ -262,7 +268,7 @@ RSpec.describe 'Yield Syntax Support' do
 
   describe 'mixed block and class-based stages' do
     it 'allows mixing block-based and class-based stages' do
-      class YieldMixedProcessor < Minigun::ConsumerStage
+      processor_stage = Class.new(Minigun::ConsumerStage) do
         def call(item)
           yield(item * 2)
         end
@@ -276,6 +282,7 @@ RSpec.describe 'Yield Syntax Support' do
 
         define_method(:results) { results }
         define_method(:mutex) { mutex }
+        define_method(:processor_stage) { processor_stage }
 
         pipeline do
           # Block-based producer
@@ -283,7 +290,7 @@ RSpec.describe 'Yield Syntax Support' do
             3.times { |i| output << i }
           end
           # Class-based processor with yield
-          custom_stage(YieldMixedProcessor, :transform)
+          custom_stage(processor_stage, :transform)
           # Block-based consumer
           consumer :collect do |item|
             mutex.synchronize { results << item }

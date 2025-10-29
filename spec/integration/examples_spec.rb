@@ -1025,9 +1025,9 @@ RSpec.describe 'Examples Integration' do
   describe 'Example Coverage' do
     it 'has tests for all example files' do
       examples_dir = File.expand_path('../../examples', __dir__)
-      example_files = Dir.glob(File.join(examples_dir, '*.rb')).map do |path|
+      all_files = Dir.glob(File.join(examples_dir, '*.rb')).map do |path|
         File.basename(path)
-      end.reject { |f| f.start_with?('000_') || f == '99_test_mixed.rb' } # Exclude dev/test files
+      end
 
       spec_file = File.read(__FILE__)
 

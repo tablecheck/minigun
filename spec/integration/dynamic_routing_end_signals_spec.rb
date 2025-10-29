@@ -4,7 +4,7 @@ require 'spec_helper'
 
 RSpec.describe 'Dynamic routing END signal propagation' do
   it 'sends END signals to stages routed via .to()' do
-    class DynamicRoutingTask
+    task_class = Class.new do
       include Minigun::DSL
 
       attr_reader :results
@@ -26,7 +26,7 @@ RSpec.describe 'Dynamic routing END signal propagation' do
       end
     end
 
-    task = DynamicRoutingTask.new
+    task = task_class.new
     task.run
 
     # Should receive all items and terminate properly
@@ -34,7 +34,7 @@ RSpec.describe 'Dynamic routing END signal propagation' do
   end
 
   it 'handles multiple .to() targets' do
-    class MultipleDynamicRoutingTask
+    task_class = Class.new do
       include Minigun::DSL
 
       attr_reader :even_results, :odd_results
@@ -64,7 +64,7 @@ RSpec.describe 'Dynamic routing END signal propagation' do
       end
     end
 
-    task = MultipleDynamicRoutingTask.new
+    task = task_class.new
     task.run
 
     expect(task.even_results.sort).to eq([2, 4])
@@ -72,7 +72,7 @@ RSpec.describe 'Dynamic routing END signal propagation' do
   end
 
   it 'properly terminates stages with both static and dynamic inputs' do
-    class MixedRoutingTask
+    task_class = Class.new do
       include Minigun::DSL
 
       attr_reader :results
@@ -99,7 +99,7 @@ RSpec.describe 'Dynamic routing END signal propagation' do
       end
     end
 
-    task = MixedRoutingTask.new
+    task = task_class.new
     task.run
 
     # Should receive all items from both sources

@@ -16,6 +16,10 @@ Gemspec/RequiredRubyVersion:
 Layout/LineLength:
   Enabled: false
 
+Lint/EmptyBlock:
+  Exclude:
+    - 'spec/**/*'
+
 Metrics/AbcSize:
   Enabled: false
 
