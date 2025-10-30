@@ -227,14 +227,14 @@ RSpec.describe Minigun::Worker do
       executor = instance_double(Minigun::Execution::InlineExecutor)
       allow(executor).to receive(:shutdown)
 
-      # Mock executor creation to return our test double
-      allow_any_instance_of(described_class).to receive(:create_executor_if_needed).and_return(executor)
+      # Mock executor creation to return our test double (now takes stage_ctx arg)
+      allow_any_instance_of(described_class).to receive(:create_executor_if_needed).with(any_args).and_return(executor)
 
       worker = described_class.new(pipeline, stage, config)
 
-      # Cause an error in the worker loop
-      allow(pipeline).to receive(:stage_input_queues)
-        .and_raise(StandardError, 'Test error')
+      # Cause an error AFTER stage_ctx is created (so executor gets created)
+      # Error during stage.run_stage (after executor is created)
+      allow(stage).to receive(:run_stage).and_raise(StandardError, 'Test error')
 
       expect(executor).to receive(:shutdown)
 

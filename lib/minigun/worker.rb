@@ -4,7 +4,7 @@ module Minigun
   # Unified worker for all stage types (producers and consumers)
   # Manages thread lifecycle and delegates to stage.run_stage()
   class Worker
-    attr_reader :thread, :stage_name, :stage
+    attr_reader :thread, :stage_name, :stage, :executor
 
     def initialize(pipeline, stage, config = {})
       @pipeline = pipeline
@@ -12,6 +12,7 @@ module Minigun
       @stage_name = stage.name
       @config = config
       @thread = nil
+      @executor = nil # Created later in create_stage_context
     end
 
     # Start the worker thread
@@ -46,7 +47,7 @@ module Minigun
       log_error "Unhandled error: #{e.message}"
       log_error e.backtrace.join("\n")
     ensure
-      stage_ctx&.executor&.shutdown
+      @executor&.shutdown
     end
 
     def handle_disconnected_stage(stage_ctx) # rubocop:disable Naming/PredicateMethod
@@ -88,8 +89,8 @@ module Minigun
       is_terminal = dag.terminal?(@stage_name)
       stage_stats = @pipeline.stats.for_stage(@stage_name, is_terminal: is_terminal)
 
-      # Create stage context WITHOUT executor first
       stage_ctx = StageContext.new(
+        worker: self,
         pipeline: @pipeline,
         stage_name: @stage_name,
         dag: dag,
@@ -99,12 +100,11 @@ module Minigun
         # Worker-specific (nil/empty for producers)
         input_queue: stage_input_queues[@stage_name],
         sources_expected: sources_expected,
-        sources_done: Set.new,
-        executor: nil
+        sources_done: Set.new
       )
 
       # Create executor with stage_ctx (only for non-autonomous stages)
-      stage_ctx.executor = create_executor_if_needed(stage_ctx)
+      @executor = create_executor_if_needed(stage_ctx)
 
       stage_ctx
     end

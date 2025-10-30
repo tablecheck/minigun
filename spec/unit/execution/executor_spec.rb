@@ -153,10 +153,10 @@ RSpec.describe Minigun::Execution::Executor do
 end
 
 RSpec.describe Minigun::Execution::InlineExecutor do
+  let(:stage_stats) { double('stage_stats', start!: nil, start_time: nil, increment_consumed: nil, increment_produced: nil, record_latency: nil) }
   let(:stage_ctx) do
     dag = double('dag', terminal?: false)
     pipeline = double('pipeline', name: 'test_pipeline', dag: dag, send: nil)
-    stage_stats = double('stage_stats', start!: nil, start_time: nil, increment_consumed: nil, increment_produced: nil, record_latency: nil)
     double('stage_ctx', pipeline: pipeline, stage_name: :test, stage_stats: stage_stats, dag: dag)
   end
   let(:executor) { described_class.new(stage_ctx) }
@@ -174,7 +174,6 @@ RSpec.describe Minigun::Execution::InlineExecutor do
            execute: nil,
            respond_to?: false)
   end
-  let(:stage_stats) { double('stage_stats', start!: nil, start_time: nil, increment_consumed: nil, increment_produced: nil, record_latency: nil) }
   let(:stats) { double('stats', for_stage: stage_stats) }
   let(:user_context) { double('user_context') }
 
@@ -212,10 +211,10 @@ RSpec.describe Minigun::Execution::InlineExecutor do
 end
 
 RSpec.describe Minigun::Execution::ThreadPoolExecutor do
+  let(:stage_stats) { double('stage_stats', start!: nil, start_time: nil, increment_consumed: nil, increment_produced: nil, record_latency: nil) }
   let(:stage_ctx) do
     dag = double('dag', terminal?: false)
     pipeline = double('pipeline', name: 'test_pipeline', dag: dag, send: nil)
-    stage_stats = double('stage_stats', start!: nil, start_time: nil, increment_consumed: nil, increment_produced: nil, record_latency: nil)
     double('stage_ctx', pipeline: pipeline, stage_name: :test, stage_stats: stage_stats, dag: dag)
   end
   let(:executor) { described_class.new(stage_ctx, max_size: 3) }
@@ -242,7 +241,6 @@ RSpec.describe Minigun::Execution::ThreadPoolExecutor do
              block: nil,
              respond_to?: false)
     end
-    let(:stage_stats) { double('stage_stats', start!: nil, start_time: nil, increment_consumed: nil, increment_produced: nil, record_latency: nil) }
     let(:stats) { double('stats', for_stage: stage_stats) }
     let(:user_context) { double('user_context') }
 

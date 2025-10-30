@@ -11,12 +11,17 @@ module Minigun
     :stage_input_queues,
     :stage_stats,
     # Worker-specific (nil/empty for producers)
+    :worker,
     :input_queue,
     :sources_expected,
     :sources_done,
-    :executor,
     keyword_init: true
-  )
+  ) do
+    # Convenience method to access executor through worker
+    def executor
+      worker&.executor
+    end
+  end
 
   # Base class for all execution units (stages and pipelines)
   # Implements the Composite pattern where Pipeline is a composite Stage
