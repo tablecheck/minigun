@@ -539,18 +539,18 @@ module Minigun
     end
 
     # Factory for creating executors
-    def self.create_executor(type:, max_size:, stage_ctx:)
+    def self.create_executor(type, ...)
       case type
       when :inline
-        InlineExecutor.new(stage_ctx)
+        InlineExecutor.new(...)
       when :thread
-        ThreadPoolExecutor.new(stage_ctx, max_size: max_size)
+        ThreadPoolExecutor.new(...)
       when :cow_fork
-        CowForkPoolExecutor.new(stage_ctx, max_size: max_size)
+        CowForkPoolExecutor.new(...)
       when :ipc_fork
-        IpcForkPoolExecutor.new(stage_ctx, max_size: max_size)
+        IpcForkPoolExecutor.new(...)
       when :ractor
-        RactorPoolExecutor.new(stage_ctx, max_size: max_size)
+        RactorPoolExecutor.new(...)
       else
         raise ArgumentError, "Unknown executor type: #{type}. Valid types: :inline, :thread, :cow_fork, :ipc_fork, :ractor"
       end

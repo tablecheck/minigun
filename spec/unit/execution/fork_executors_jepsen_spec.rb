@@ -21,6 +21,9 @@ RSpec.describe 'Fork Executors - Jepsen-style Tests', skip: Gem.win_platform? do
            send: nil)
   end
   let(:stage_stats) { Minigun::Stats.new('test_stage') }
+  let(:stage_ctx) do
+    Struct.new(:stage_stats, :pipeline).new(stage_stats, pipeline)
+  end
 
   # Helper to create a mock stage that processes items
   def create_stage(name: 'test_stage', processor: nil, expects_context: false)
@@ -59,7 +62,7 @@ RSpec.describe 'Fork Executors - Jepsen-style Tests', skip: Gem.win_platform? do
   end
 
   shared_examples 'fork executor correctness' do |executor_type|
-    let(:executor) { Minigun::Execution.create_executor(type: executor_type, max_size: pool_size) }
+    let(:executor) { Minigun::Execution.create_executor(executor_type, stage_ctx, max_size: pool_size) }
     let(:pool_size) { 4 }
 
     describe 'Data Integrity' do
@@ -94,7 +97,7 @@ RSpec.describe 'Fork Executors - Jepsen-style Tests', skip: Gem.win_platform? do
           input_queue << Minigun::EndOfStage.new('test')
 
           stage = create_stage
-          executor_instance = Minigun::Execution.create_executor(type: executor_type, max_size: pool_size)
+          executor_instance = Minigun::Execution.create_executor(executor_type, stage_ctx, max_size: pool_size)
           executor_instance.execute_stage(stage, {}, input_queue, output_queue, stage_stats)
 
           results = []
@@ -275,7 +278,7 @@ RSpec.describe 'Fork Executors - Jepsen-style Tests', skip: Gem.win_platform? do
       end
 
       it 'completes even if pool size > item count' do
-        large_pool_executor = Minigun::Execution.create_executor(type: executor_type, max_size: 100)
+        large_pool_executor = Minigun::Execution.create_executor(executor_type, stage_ctx, max_size: 100)
 
         items = (1..10).to_a
         input_queue = Queue.new
@@ -404,7 +407,7 @@ RSpec.describe 'Fork Executors - Jepsen-style Tests', skip: Gem.win_platform? do
       end
 
       it 'handles shutdown gracefully' do
-        executor_instance = Minigun::Execution.create_executor(type: executor_type, max_size: 4)
+        executor_instance = Minigun::Execution.create_executor(executor_type, stage_ctx, max_size: 4)
 
         expect { executor_instance.shutdown }.not_to raise_error
       end
@@ -478,7 +481,7 @@ RSpec.describe 'Fork Executors - Jepsen-style Tests', skip: Gem.win_platform? do
     include_examples 'fork executor correctness', :cow_fork
 
     describe 'COW-specific behavior' do
-      let(:executor) { Minigun::Execution.create_executor(type: :cow_fork, max_size: 4) }
+      let(:executor) { Minigun::Execution.create_executor(:cow_fork, stage_ctx, max_size: 4) }
 
       it 'shares memory via copy-on-write' do
         # Large read-only data structure - captured in closure
@@ -547,7 +550,7 @@ RSpec.describe 'Fork Executors - Jepsen-style Tests', skip: Gem.win_platform? do
     include_examples 'fork executor correctness', :ipc_fork
 
     describe 'IPC-specific behavior' do
-      let(:executor) { Minigun::Execution.create_executor(type: :ipc_fork, max_size: 4) }
+      let(:executor) { Minigun::Execution.create_executor(:ipc_fork, stage_ctx, max_size: 4) }
 
       it 'uses persistent worker processes' do
         items = (1..20).to_a

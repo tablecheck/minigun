@@ -32,6 +32,9 @@ module Minigun
 
       stage_ctx = create_stage_context
 
+      # Create executor with stage_ctx (only for non-autonomous stages)
+      @executor = create_executor_if_needed(stage_ctx)
+
       # Check for disconnected stages (no upstream, not a producer, not a PipelineStage)
       return if handle_disconnected_stage(stage_ctx)
 
@@ -89,7 +92,7 @@ module Minigun
       is_terminal = dag.terminal?(@stage_name)
       stage_stats = @pipeline.stats.for_stage(@stage_name, is_terminal: is_terminal)
 
-      stage_ctx = StageContext.new(
+      StageContext.new(
         worker: self,
         pipeline: @pipeline,
         stage_name: @stage_name,
@@ -102,11 +105,6 @@ module Minigun
         sources_expected: sources_expected,
         sources_done: Set.new
       )
-
-      # Create executor with stage_ctx (only for non-autonomous stages)
-      @executor = create_executor_if_needed(stage_ctx)
-
-      stage_ctx
     end
 
     def create_executor_if_needed(stage_ctx)
@@ -118,7 +116,7 @@ module Minigun
       type = exec_ctx[:type]
       pool_size = exec_ctx[:pool_size] || exec_ctx[:max] || default_pool_size(type)
 
-      Execution.create_executor(type: type, max_size: pool_size, stage_ctx: stage_ctx)
+      Execution.create_executor(type, stage_ctx, max_size: pool_size)
     end
 
     # TODO: Move this elsewhere? DSL class?

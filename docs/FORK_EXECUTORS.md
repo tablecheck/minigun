@@ -168,13 +168,6 @@ class MyTask
 end
 ```
 
-Or via the factory:
-
-```ruby
-executor = Minigun::Execution.create_executor(type: :cow_fork, max_size: 4)
-executor = Minigun::Execution.create_executor(type: :ipc_fork, max_size: 4)
-```
-
 ## Platform Support
 
 Both fork executors require `Process.fork` support:

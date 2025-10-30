@@ -18,30 +18,30 @@ RSpec.describe Minigun::Execution::Executor do
 
   describe 'Factory method' do
     it 'creates correct executor type via factory' do
-      thread_executor = Minigun::Execution.create_executor(type: :thread, max_size: 5, stage_ctx: mock_stage_ctx)
+      thread_executor = Minigun::Execution.create_executor(:thread, mock_stage_ctx, max_size: 5)
       expect(thread_executor).to be_a(Minigun::Execution::ThreadPoolExecutor)
       expect(thread_executor.max_size).to eq(5)
 
-      inline_executor = Minigun::Execution.create_executor(type: :inline, max_size: 3, stage_ctx: mock_stage_ctx)
+      inline_executor = Minigun::Execution.create_executor(:inline, mock_stage_ctx)
       expect(inline_executor).to be_a(Minigun::Execution::InlineExecutor)
 
-      cow_fork_executor = Minigun::Execution.create_executor(type: :cow_fork, max_size: 3, stage_ctx: mock_stage_ctx)
+      cow_fork_executor = Minigun::Execution.create_executor(:cow_fork, mock_stage_ctx, max_size: 3)
       expect(cow_fork_executor).to be_a(Minigun::Execution::CowForkPoolExecutor)
       expect(cow_fork_executor.max_size).to eq(3)
 
-      ipc_fork_executor = Minigun::Execution.create_executor(type: :ipc_fork, max_size: 4, stage_ctx: mock_stage_ctx)
+      ipc_fork_executor = Minigun::Execution.create_executor(:ipc_fork, mock_stage_ctx, max_size: 4)
       expect(ipc_fork_executor).to be_a(Minigun::Execution::IpcForkPoolExecutor)
       expect(ipc_fork_executor.max_size).to eq(4)
     end
 
     it 'all executors extend Executor base class' do
-      executor = Minigun::Execution.create_executor(type: :thread, max_size: 5, stage_ctx: mock_stage_ctx)
+      executor = Minigun::Execution.create_executor(:thread, mock_stage_ctx, max_size: 5)
       expect(executor).to be_a(described_class)
     end
 
     it 'raises error for unknown type' do
       expect do
-        Minigun::Execution.create_executor(type: :unknown, max_size: 5, stage_ctx: mock_stage_ctx)
+        Minigun::Execution.create_executor(:unknown, mock_stage_ctx, max_size: 5)
       end.to raise_error(ArgumentError, /Unknown executor type/)
     end
   end
