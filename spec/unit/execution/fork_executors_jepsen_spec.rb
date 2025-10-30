@@ -221,25 +221,10 @@ RSpec.describe 'Fork Executors - Jepsen-style Tests', skip: Gem.win_platform? do
           item * 2
         })
 
-        # Executor should handle errors (IPC raises, COW logs and continues)
-        is_ipc = executor.is_a?(Minigun::Execution::IpcForkPoolExecutor)
-
-        if is_ipc
-          expect do
-            executor.execute_stage(stage, {}, input_queue, output_queue, stage_stats)
-          end.to raise_error(/error/i)
-        else
-          # COW fork logs errors but continues
-          expect do
-            executor.execute_stage(stage, {}, input_queue, output_queue, stage_stats)
-          end.not_to raise_error
-
-          # Should have processed non-error items
-          results = []
-          results << output_queue.pop until output_queue.empty?
-          expect(results.size).to be > 0
-          expect(results.size).to be < items.size # Some items failed
-        end
+        # Both executors use IPC for error communication, so both raise errors
+        expect do
+          executor.execute_stage(stage, {}, input_queue, output_queue, stage_stats)
+        end.to raise_error(/error/i)
       end
 
       it 'handles nil results correctly' do
@@ -505,10 +490,9 @@ RSpec.describe 'Fork Executors - Jepsen-style Tests', skip: Gem.win_platform? do
         items.each { |i| input_queue << i }
         input_queue << Minigun::EndOfStage.new('test')
 
-        pids_seen = []
+        # Return PID along with result to verify ephemeral processes
         stage = create_stage(processor: lambda { |item, _ctx|
-          pids_seen << Process.pid
-          item * 2
+          { item: item * 2, pid: Process.pid }
         })
 
         executor.execute_stage(stage, {}, input_queue, output_queue, stage_stats)
@@ -516,7 +500,11 @@ RSpec.describe 'Fork Executors - Jepsen-style Tests', skip: Gem.win_platform? do
         results = []
         results << output_queue.pop until output_queue.empty?
 
-        verify_exactly_once(items, results)
+        # Extract processed items and PIDs
+        processed_items = results.map { |r| r[:item] }
+        pids_seen = results.map { |r| r[:pid] }
+
+        verify_exactly_once(items, processed_items)
 
         # Each item should have been processed in a separate fork
         # (PIDs may repeat if forks are reused, but there should be multiple PIDs)
