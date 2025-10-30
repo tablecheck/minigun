@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 require_relative '../lib/minigun'
+require 'tempfile'
 
 # Example demonstrating Runner features:
 # - Job ID tracking in logs
@@ -16,6 +17,8 @@ class RunnerFeaturesExample
 
   def initialize
     @results = []
+    @temp_file = Tempfile.new(['minigun_results', '.txt'])
+    @temp_file.close
   end
 
   pipeline do
@@ -39,8 +42,18 @@ class RunnerFeaturesExample
         # You'll see: "minigun-default-consumer-12345"
         puts "[Fork:#{Process.pid}] Processing batch of #{batch.size} items"
         sleep 0.5 # Keep process alive briefly so you can see it in ps
-        batch.each { |num| @results << num }
+        # Write results to temp file (fork-safe)
+        File.open(@temp_file.path, 'a') do |f|
+          f.flock(File::LOCK_EX)
+          batch.each { |num| f.puts(num) }
+          f.flock(File::LOCK_UN)
+        end
       end
+    end
+
+    after_run do
+      # Read fork results from temp file
+      @results = File.readlines(@temp_file.path).map { |line| line.strip.to_i } if File.exist?(@temp_file.path)
     end
   end
 end

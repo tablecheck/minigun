@@ -559,30 +559,292 @@ RSpec.describe 'Examples Integration' do
     end
   end
 
-  describe '27_execution_contexts.rb' do
-    it 'demonstrates execution context types' do
-      # Just verify the example runs without errors
-      output = `ruby #{File.expand_path('../../examples/27_execution_contexts.rb', __dir__)} 2>&1`
+  describe '27_inline_execution.rb' do
+    it 'demonstrates inline synchronous execution' do
+      load File.expand_path('../../examples/27_inline_execution.rb', __dir__)
 
-      expect($CHILD_STATUS.exitstatus).to eq(0), "Example failed with output:\n#{output}"
+      example = InlineExample.new
+      example.run
+
+      expect(example.results.size).to eq(5)
+      expect(example.results.sort).to eq([0, 2, 4, 6, 8])
     end
   end
 
-  describe '28_context_pool.rb' do
-    it 'demonstrates context pool resource management' do
-      # Just verify the example runs without errors
-      output = `ruby #{File.expand_path('../../examples/28_context_pool.rb', __dir__)} 2>&1`
+  describe '27_thread_execution.rb' do
+    it 'demonstrates thread-based concurrent execution' do
+      load File.expand_path('../../examples/27_thread_execution.rb', __dir__)
 
-      expect($CHILD_STATUS.exitstatus).to eq(0), "Example failed with output:\n#{output}"
+      example = ThreadExample.new
+      example.run
+
+      expect(example.results.size).to eq(10)
+      expect(example.results.sort).to eq([0, 2, 4, 6, 8, 10, 12, 14, 16, 18])
     end
   end
 
-  describe '31_configurable_execution.rb' do
-    it 'demonstrates configurable execution contexts' do
-      # Just verify the example runs without errors
-      output = `ruby #{File.expand_path('../../examples/31_configurable_execution.rb', __dir__)} 2>&1`
+  describe '27_ractor_execution.rb' do
+    it 'demonstrates Ractor-based parallel execution' do
+      load File.expand_path('../../examples/27_ractor_execution.rb', __dir__)
 
-      expect($CHILD_STATUS.exitstatus).to eq(0), "Example failed with output:\n#{output}"
+      example = RactorExample.new
+      example.run
+
+      expect(example.results.size).to eq(5)
+      expect(example.results.sort).to eq([0, 1, 4, 9, 16])
+    end
+  end
+
+  describe '27_process_execution.rb', skip: !Process.respond_to?(:fork) do
+    it 'demonstrates process-based execution with isolation' do
+      load File.expand_path('../../examples/27_process_execution.rb', __dir__)
+
+      example = ProcessExample.new
+      example.run
+
+      expect(example.results.size).to eq(3)
+      pids = example.results.map { |r| r[:pid] }.uniq
+      expect(pids.size).to be >= 1
+      example.results.each do |result|
+        expect(result).to have_key(:item)
+        expect(result).to have_key(:pid)
+        expect(result).to have_key(:result)
+        expect(result[:result]).to eq(result[:item] * 100)
+      end
+    end
+  end
+
+  describe '27_parallel_execution.rb' do
+    it 'demonstrates parallel processing with multiple workers' do
+      load File.expand_path('../../examples/27_parallel_execution.rb', __dir__)
+
+      start = Time.now
+      example = ParallelExample.new
+      example.run
+      elapsed = Time.now - start
+
+      expect(example.results.size).to eq(10)
+      expect(example.results.sort).to eq([0, 3, 6, 9, 12, 15, 18, 21, 24, 27])
+      expect(elapsed).to be < 1.0 # Should complete quickly with parallelism
+    end
+  end
+
+  describe '27_error_handling.rb' do
+    it 'demonstrates error handling in execution contexts' do
+      load File.expand_path('../../examples/27_error_handling.rb', __dir__)
+
+      example = ErrorExample.new
+      # Error on item 2 should not prevent other items from processing
+      expect { example.run }.not_to raise_error
+
+      # Should process items 0, 1, 3, 4 (skipping 2 which raises error)
+      expect(example.results.size).to eq(4)
+      expect(example.results.sort).to eq([0, 2, 6, 8])
+      expect(example.results).not_to include(4) # Item 2 (doubled) would be 4
+    end
+  end
+
+  describe '27_termination.rb' do
+    it 'demonstrates proper termination and cleanup' do
+      load File.expand_path('../../examples/27_termination.rb', __dir__)
+
+      example = TerminationExample.new
+      example.run
+
+      expect(example.count).to eq(10)
+    end
+  end
+
+  describe '28_basic_pool.rb' do
+    it 'demonstrates basic thread pool usage' do
+      load File.expand_path('../../examples/28_basic_pool.rb', __dir__)
+
+      example = BasicPoolExample.new
+      example.run
+
+      expect(example.results.size).to eq(10)
+      expect(example.results.sort).to eq([0, 2, 4, 6, 8, 10, 12, 14, 16, 18])
+    end
+  end
+
+  describe '28_capacity_pool.rb' do
+    it 'demonstrates thread pool capacity management' do
+      load File.expand_path('../../examples/28_capacity_pool.rb', __dir__)
+
+      start = Time.now
+      example = CapacityExample.new
+      example.run
+      elapsed = Time.now - start
+
+      expect(example.results.size).to eq(20)
+      expect(example.results.sort).to eq((0..19).to_a)
+      expect(elapsed).to be > 0.1 # Limited concurrency should take some time
+    end
+  end
+
+  describe '28_parallel_pool.rb' do
+    it 'demonstrates parallel processing with thread pool' do
+      load File.expand_path('../../examples/28_parallel_pool.rb', __dir__)
+
+      example = ParallelPoolExample.new
+      example.run
+
+      expect(example.results.size).to eq(50)
+      expect(example.results.sort).to eq((0..49).map { |i| i * 2 })
+    end
+  end
+
+  describe '28_reuse_pool.rb' do
+    it 'demonstrates thread context reuse in pools' do
+      load File.expand_path('../../examples/28_reuse_pool.rb', __dir__)
+
+      example = ReuseExample.new
+      example.run
+
+      unique_threads = example.thread_ids.uniq.size
+      expect(unique_threads).to be <= 3 # Should reuse threads, not create 20
+      expect(unique_threads).to be >= 1
+    end
+  end
+
+  describe '28_bulk_pool.rb' do
+    it 'demonstrates bulk operations with thread pools' do
+      load File.expand_path('../../examples/28_bulk_pool.rb', __dir__)
+
+      start = Time.now
+      example = BulkExample.new
+      example.run
+      elapsed = Time.now - start
+
+      expect(example.results.size).to eq(100)
+      expect(example.results.sort).to eq((0..99).map { |i| i**2 })
+      expect(elapsed).to be < 1.0 # Should be fast with 20 workers
+    end
+  end
+
+  describe '28_termination_pool.rb' do
+    it 'demonstrates proper pool termination and cleanup' do
+      load File.expand_path('../../examples/28_termination_pool.rb', __dir__)
+
+      example = TerminationPoolExample.new
+      example.run
+
+      expect(example.completed).to eq(5)
+    end
+  end
+
+  describe '28_batch_processor.rb' do
+    it 'demonstrates batch processing with thread pools' do
+      load File.expand_path('../../examples/28_batch_processor.rb', __dir__)
+
+      processor = BatchProcessorExample.new(workers: 5)
+      processor.run
+
+      expect(processor.processed_count).to eq(10)
+      expect(processor.results.size).to eq(10)
+      expect(processor.results.map { |r| r[:result] }).to include('APPLE', 'BANANA', 'CHERRY')
+      processor.results.each do |result|
+        expect(result).to have_key(:item)
+        expect(result).to have_key(:result)
+        expect(result).to have_key(:timestamp)
+        expect(result[:result]).to eq(result[:item].upcase)
+      end
+    end
+  end
+
+  describe '31_configurable_downloader.rb' do
+    it 'demonstrates runtime-configurable thread pools' do
+      load File.expand_path('../../examples/31_configurable_downloader.rb', __dir__)
+
+      small_pipeline = ConfigurableDownloader.new(threads: 5, batch_size: 10)
+      large_pipeline = ConfigurableDownloader.new(threads: 20, batch_size: 50)
+
+      expect(small_pipeline.threads).to eq(5)
+      expect(small_pipeline.batch_size).to eq(10)
+      expect(large_pipeline.threads).to eq(20)
+      expect(large_pipeline.batch_size).to eq(50)
+
+      small_pipeline.run
+      large_pipeline.run
+
+      expect(small_pipeline.results.size).to eq(50)
+      expect(large_pipeline.results.size).to eq(50)
+    end
+  end
+
+  describe '31_data_processor.rb' do
+    it 'demonstrates configurable process-per-batch' do
+      load File.expand_path('../../examples/31_data_processor.rb', __dir__)
+
+      processor = DataProcessor.new(threads: 10, processes: 2, batch_size: 100)
+      expect(processor.threads).to eq(10)
+      expect(processor.processes).to eq(2)
+      expect(processor.batch_size).to eq(100)
+
+      processor.run
+
+      expect(processor.processed_count).to be > 0
+    end
+  end
+
+  describe '31_smart_pipeline.rb' do
+    it 'demonstrates environment-based pipeline configuration' do
+      load File.expand_path('../../examples/31_smart_pipeline.rb', __dir__)
+
+      # Test default (development)
+      smart = SmartPipeline.new
+      expect(smart.env).to eq('development')
+      expect(smart.threads).to eq(10)
+      expect(smart.processes).to eq(2)
+      expect(smart.batch_size).to eq(100)
+
+      # Test production configuration
+      ENV['RACK_ENV'] = 'production'
+      prod_pipeline = SmartPipeline.new
+      expect(prod_pipeline.threads).to eq(100)
+      expect(prod_pipeline.processes).to eq(8)
+      expect(prod_pipeline.batch_size).to eq(5000)
+      ENV.delete('RACK_ENV')
+    end
+  end
+
+  describe '31_adaptive_pipeline.rb' do
+    it 'demonstrates dynamic configuration based on runtime conditions' do
+      load File.expand_path('../../examples/31_adaptive_pipeline.rb', __dir__)
+
+      low_pipeline = AdaptivePipeline.new(concurrency: :low)
+      expect(low_pipeline.thread_count).to eq(10)
+      expect(low_pipeline.process_count).to eq(2)
+      expect(low_pipeline.batch_size).to eq(100)
+
+      medium_pipeline = AdaptivePipeline.new(concurrency: :medium)
+      expect(medium_pipeline.thread_count).to eq(50)
+      expect(medium_pipeline.process_count).to eq(4)
+      expect(medium_pipeline.batch_size).to eq(1000)
+
+      high_pipeline = AdaptivePipeline.new(concurrency: :high)
+      expect(high_pipeline.thread_count).to eq(200)
+      expect(high_pipeline.process_count).to eq(16)
+      expect(high_pipeline.batch_size).to eq(10_000)
+    end
+  end
+
+  describe '31_configurable_pipeline.rb' do
+    it 'demonstrates configuration object pattern' do
+      load File.expand_path('../../examples/31_configurable_pipeline.rb', __dir__)
+
+      config = PipelineConfig.new
+      config.thread_pool_size = 10
+      config.process_pool_size = 2
+      config.batch_size = 50
+
+      pipeline = ConfigurablePipeline.new(config: config)
+      expect(config.thread_pool_size).to eq(10)
+      expect(config.process_pool_size).to eq(2)
+      expect(config.batch_size).to eq(50)
+
+      pipeline.run
+      expect(pipeline.results.size).to eq(10)
     end
   end
 
