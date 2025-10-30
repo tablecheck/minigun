@@ -38,7 +38,7 @@ class SimpleETLExample
         value: record[:value],
         raw: false,
         processed: true,
-        timestamp: Time.now.iso8601
+        timestamp: Time.now.strftime('%Y-%m-%dT%H:%M:%S%z')
       }
 
       @mutex.synchronize { transformed << transformed_record }

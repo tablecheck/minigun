@@ -163,7 +163,8 @@ module Minigun
         end
 
         # Execute before_fork hooks in parent process (once, before any forks)
-        @stage_ctx.pipeline&.send(:execute_stage_hooks, :before_fork, stage.name)
+        # This executes both pipeline-level and stage-specific hooks
+        @stage_ctx.pipeline&.send(:execute_fork_hooks, :before_fork, stage.name)
 
         all_items_queued = false
 
@@ -220,7 +221,8 @@ module Minigun
 
           begin
             # Execute after_fork hooks in child process
-            pipeline&.send(:execute_stage_hooks, :after_fork, stage.name)
+            # This executes both pipeline-level and stage-specific hooks
+            pipeline&.send(:execute_fork_hooks, :after_fork, stage.name)
 
             # Child process has inherited item via COW
             # Execute the stage's block on this single item
@@ -343,7 +345,8 @@ module Minigun
         end
 
         # Execute before_fork hooks in parent process (before spawning workers)
-        @stage_ctx.pipeline&.send(:execute_stage_hooks, :before_fork, stage.name)
+        # This executes both pipeline-level and stage-specific hooks
+        @stage_ctx.pipeline&.send(:execute_fork_hooks, :before_fork, stage.name)
 
         # Spawn persistent worker processes
         spawn_workers(stage, user_context)
@@ -434,7 +437,8 @@ module Minigun
 
       def worker_loop(stage, user_context, stage_stats, from_parent, to_parent, pipeline)
         # Execute after_fork hooks in child process
-        pipeline&.send(:execute_stage_hooks, :after_fork, stage.name)
+        # This executes both pipeline-level and stage-specific hooks
+        pipeline&.send(:execute_fork_hooks, :after_fork, stage.name)
 
         # Create IPC-backed input queue that reads from parent via IPC
         ipc_input_queue = Minigun::IpcInputQueue.new(from_parent, stage.name)

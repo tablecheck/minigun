@@ -29,7 +29,7 @@ class Customer
       id: @id,
       name: @name,
       email: @email,
-      updated_at: @updated_at.iso8601
+      updated_at: @updated_at.strftime('%Y-%m-%dT%H:%M:%S%z')
     }
   end
 end
@@ -56,7 +56,7 @@ class DatabasePublisher
   def enrich_customer_data(customer_data)
     # Simulate enrichment: add derived fields, lookup related data, etc.
     customer_data.merge(
-      published_at: Time.now.iso8601,
+      published_at: Time.now.strftime('%Y-%m-%dT%H:%M:%S%z'),
       source: 'database_publisher',
       version: 1
     )

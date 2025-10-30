@@ -111,6 +111,19 @@ I see the issue now - when you're inside a pipeline block, the stages within it 
 
 ====================================
 
+- hooks (fork, stage, nesting)
+- output.to of IpcQueues
+- Fork/Thread etc should create an implicit pipeline
+- cow_fork getting IPC input via to from IPC
+- cow_fork getting IPC input via to from COW
+- cow_fork getting IPC input via to from threads
+- cow_fork getting IPC input via to from master(?)
+- cow_fork doing IPC output
+- ipc 2 cow, cow to ipc, ipc to master
+- ipc/cow fan-out/fan-in
+
+==================================
+
 This method looks suss:
 
     def execute(context, item: nil, _input_queue: nil, output_queue: nil)

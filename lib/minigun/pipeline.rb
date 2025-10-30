@@ -160,6 +160,15 @@ module Minigun
       hooks.each { |h| @context.instance_exec(&h) }
     end
 
+    # Execute both pipeline-level and stage-specific hooks
+    # Pipeline-level hooks are executed first, then stage-specific hooks
+    def execute_fork_hooks(type, stage_name)
+      # Execute pipeline-level hooks first
+      (@hooks[type] || []).each { |h| @context.instance_exec(&h) }
+      # Then execute stage-specific hooks
+      execute_stage_hooks(type, stage_name)
+    end
+
     # Run this pipeline
     def run(context, job_id: nil)
       @context = context
