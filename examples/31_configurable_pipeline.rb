@@ -44,13 +44,13 @@ class ConfigurablePipeline
     batch @config.batch_size
 
     process_per_batch(max: @config.process_pool_size) do
-      processor :parse do |batch, _output|
-        batch.map { |x| x + 100 }
+      processor :parse do |batch, output|
+        batch.map { |x| x + 100 }.each { |result| output << result }
       end
     end
 
-    consumer :save do |results|
-      @results.concat(results)
+    consumer :save do |result|
+      @results << result
     end
   end
 end
