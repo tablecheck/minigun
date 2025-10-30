@@ -65,7 +65,7 @@ RSpec.describe Minigun::Worker do
         # Simulate basic loop: wait for END signal
         loop do
           msg = worker_ctx.input_queue.pop
-          break if msg.is_a?(Minigun::Message) && msg.end_of_stream?
+          break if msg.is_a?(Minigun::EndOfSource)
         end
       end
 
