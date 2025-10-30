@@ -35,9 +35,9 @@ class DataProcessor
 
     # CPU-intensive processing per batch with process isolation
     process_per_batch(max: @processes) do
-      processor :parse do |batch, _output|
+      processor :parse do |batch, output|
         # Simulate CPU-intensive work
-        batch.map { |item| item[:data].upcase }
+        batch.map { |item| item[:data].upcase }.each { |result| output << result }
       end
     end
 

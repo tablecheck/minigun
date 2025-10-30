@@ -848,6 +848,36 @@ RSpec.describe 'Examples Integration' do
     end
   end
 
+  describe '27_execution_contexts.rb' do
+    it 'demonstrates execution context types as standalone script', timeout: 30 do
+      # This is a consolidated demo file - just verify it runs
+      cmd = "bundle exec ruby #{File.expand_path('../../examples/27_execution_contexts.rb', __dir__)}"
+      output = `#{cmd} 2>&1`
+
+      expect($CHILD_STATUS.exitstatus).to eq(0), "Example failed with output:\n#{output}"
+    end
+  end
+
+  describe '28_context_pool.rb' do
+    it 'demonstrates context pool resource management as standalone script', timeout: 30 do
+      # This is a consolidated demo file - just verify it runs
+      cmd = "bundle exec ruby #{File.expand_path('../../examples/28_context_pool.rb', __dir__)}"
+      output = `#{cmd} 2>&1`
+
+      expect($CHILD_STATUS.exitstatus).to eq(0), "Example failed with output:\n#{output}"
+    end
+  end
+
+  describe '31_configurable_execution.rb' do
+    it 'demonstrates configurable execution contexts as standalone script', timeout: 30 do
+      # This is a consolidated demo file - just verify it runs
+      cmd = "bundle exec ruby #{File.expand_path('../../examples/31_configurable_execution.rb', __dir__)}"
+      output = `#{cmd} 2>&1`
+
+      expect($CHILD_STATUS.exitstatus).to eq(0), "Example failed with output:\n#{output}"
+    end
+  end
+
   describe '32_execution_blocks.rb' do
     it 'demonstrates execution block patterns' do
       load File.expand_path('../../examples/32_execution_blocks.rb', __dir__)

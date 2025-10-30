@@ -72,6 +72,39 @@ ipc_forks(10) do # creates a pipeline
 
 ractors
 
+
+      # Execution block methods
+      def threads(pool_size, &)
+        context = { type: :threads, pool_size: pool_size, mode: :pool }
+        _with_execution_context(context, &)
+      end
+
+      def processes(pool_size, &)
+        context = { type: :cow_forks, pool_size: pool_size, mode: :pool }
+        _with_execution_context(context, &)
+      end
+
+      def ractors(pool_size, &)
+        context = { type: :ractors, pool_size: pool_size, mode: :pool }
+        _with_execution_context(context, &)
+      end
+
+      def thread_per_batch(max:, &)
+        context = { type: :threads, max: max, mode: :per_batch }
+        _with_execution_context(context, &)
+      end
+
+      def process_per_batch(max:, &)
+        context = { type: :cow_forks, max: max, mode: :per_batch }
+        _with_execution_context(context, &)
+      end
+
+      def ractor_per_batch(max:, &)
+        context = { type: :ractors, max: max, mode: :per_batch }
+        _with_execution_context(context, &)
+      end
+
+
 ===============================
 
 dynamic scaling
