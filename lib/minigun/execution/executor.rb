@@ -93,24 +93,31 @@ module Minigun
 
       # Read result from child via IPC pipe
       def read_result_from_pipe(reader, output_queue)
-        begin
-          response = Marshal.load(reader)
-          case response[:type]
-          when :result
-            output_queue << response[:result]
-          when :error
-            error_msg = response[:error] || "Unknown error in forked process"
-            backtrace = response[:backtrace]
-            exception = RuntimeError.new("Fork error: #{error_msg}")
-            exception.set_backtrace(backtrace) if backtrace
-            raise exception
-          when :no_result
-            # Child processed but produced no output
+        response = Marshal.load(reader)
+        case response[:type]
+        when :result
+          result = response[:result]
+          # Handle arrays of results (multiple items written to output_queue)
+          if result.is_a?(Array)
+            result.each { |item| output_queue << item }
+          elsif !result.nil?
+            output_queue << result
           end
-        rescue EOFError, IOError => e
-          warn "[Minigun] Error reading from pipe: #{e.message}"
-          raise
+        when :error
+          error_msg = response[:error] || "Unknown error in forked process"
+          backtrace = response[:backtrace]
+          exception = RuntimeError.new("COW forked process failed: #{error_msg}")
+          exception.set_backtrace(backtrace) if backtrace
+          raise exception
+        when :no_result
+          # Child processed but produced no output
         end
+      rescue EOFError
+        # Normal EOF - worker finished processing, re-raise to exit collection loop
+        raise
+      rescue IOError => e
+        warn "[Minigun] Error reading from pipe: #{e.message}"
+        raise
       end
 
       # Send error from child to parent via IPC pipe
@@ -193,12 +200,39 @@ module Minigun
 
           begin
             # Child process has inherited item via COW
-            # Read from item (read-only, no COW copy triggered)
             # Execute the stage's block on this single item
-            result = stage.process_item(item, user_context)
+            # Create a capture queue to collect results written to output_queue
+            capture_queue = Queue.new
+            capture_output = Minigun::OutputQueue.new(
+              stage.name,
+              [capture_queue],
+              {},
+              {},
+              stage_stats: stage_stats
+            )
 
-            # Send result back to parent via IPC pipe
-            write_result_to_pipe(result, writer)
+            # Execute stage block with item and capture output queue
+            start_time = Time.now if stage_stats
+            if stage.respond_to?(:block) && stage.block
+              user_context.instance_exec(item, capture_output, &stage.block)
+            elsif stage.respond_to?(:call)
+              stage.call_with_arity(item, capture_output, &capture_output.to_proc)
+            end
+            stage_stats&.record_latency(Time.now - start_time) if stage_stats
+
+            # Collect all results written to capture queue
+            results = []
+            loop do
+              result = capture_queue.pop(true)  # non_block = true
+              results << result
+            rescue ThreadError
+              break
+            end
+
+            # Send first result (or nil if none) back to parent via IPC pipe
+            # For multiple results, we send them as an array
+            result_to_send = results.size == 1 ? results.first : (results.empty? ? nil : results)
+            write_result_to_pipe(result_to_send, writer)
           rescue => e
             # Send error back to parent via IPC
             write_error_to_pipe(e, writer)
@@ -215,8 +249,26 @@ module Minigun
           writer.close
           warn '[Minigun] Failed to fork process, falling back to inline'
           # Fall back to processing inline for this item
-          result = stage.process_item(item, user_context)
-          output_queue << result unless result.nil?
+          capture_queue = Queue.new
+          capture_output = Minigun::OutputQueue.new(
+            stage.name,
+            [capture_queue],
+            {},
+            {},
+            stage_stats: stage_stats
+          )
+          if stage.respond_to?(:block) && stage.block
+            user_context.instance_exec(item, capture_output, &stage.block)
+          elsif stage.respond_to?(:call)
+            stage.call_with_arity(item, capture_output, &capture_output.to_proc)
+          end
+          # Write captured results to output_queue
+          loop do
+            result = capture_queue.pop(true)  # non_block = true
+            output_queue << result
+          rescue ThreadError
+            break
+          end
           return
         end
 
@@ -282,13 +334,29 @@ module Minigun
         @mutex.synchronize do
           @workers.each do |worker|
             begin
-              # Send shutdown signal
-              Marshal.dump({ type: :shutdown }, worker[:to_worker])
-              worker[:to_worker].close
-              worker[:from_worker].close
+              # Send shutdown signal (as end_of_stage so IpcInputQueue handles it)
+              Marshal.dump({ type: :end_of_stage }, worker[:to_worker])
+              worker[:to_worker].flush
+            rescue IOError, EOFError, Errno::EPIPE
+              # Worker already closed or pipe broken, ignore
+            end
+          end
 
-              # Wait for worker to exit
-              Process.wait(worker[:pid])
+          # Give workers a moment to finish processing
+          sleep 0.1
+
+          @workers.each do |worker|
+            begin
+              # Close pipes
+              worker[:to_worker].close rescue nil
+              worker[:from_worker].close rescue nil
+
+              # Wait for worker to exit (non-blocking)
+              begin
+                Process.wait2(worker[:pid], Process::WNOHANG)
+              rescue Errno::ECHILD
+                # Already reaped
+              end
             rescue => e
               # Force kill if graceful shutdown fails
               Process.kill('TERM', worker[:pid]) rescue nil
@@ -336,26 +404,19 @@ module Minigun
       end
 
       def worker_loop(stage, user_context, stage_stats, from_parent, to_parent)
-        loop do
-          # Read item from parent via IPC
-          message = Marshal.load(from_parent)
+        # Create IPC-backed input queue that reads from parent via IPC
+        ipc_input_queue = IpcInputQueue.new(from_parent)
 
-          break if message[:type] == :shutdown
+        # Create IPC-backed output queue that writes results back to parent via IPC
+        ipc_output_queue = IpcOutputQueue.new(to_parent, stage_stats)
 
-          if message[:type] == :item
-            item = message[:item]
-
-            begin
-              # Process the item
-              result = stage.process_item(item, user_context)
-
-              # Send result back to parent via IPC pipe
-              write_result_to_pipe(result, to_parent)
-            rescue => e
-              # Send error back to parent via IPC pipe
-              write_error_to_pipe(e, to_parent)
-            end
-          end
+        begin
+          # Run the stage's execute method with IPC-backed queues
+          # This runs the full streaming loop in the worker process
+          stage.execute(user_context, ipc_input_queue, ipc_output_queue, stage_stats)
+        rescue => e
+          # Send error back to parent via IPC pipe
+          write_error_to_pipe(e, to_parent)
         end
       rescue EOFError, IOError
         # Parent closed pipe, exit gracefully
@@ -365,28 +426,119 @@ module Minigun
         exit! 0
       end
 
+      # IPC-backed input queue that reads items from parent via IPC pipe
+      class IpcInputQueue
+        def initialize(pipe_reader)
+          @pipe_reader = pipe_reader
+          @buffer = []
+        end
+
+        def pop
+          # Return buffered item if available
+          return @buffer.shift unless @buffer.empty?
+
+          # Read from IPC pipe
+          loop do
+            message = Marshal.load(@pipe_reader)
+
+            case message[:type]
+            when :item
+              return message[:item]
+            when :end_of_stage
+              return Minigun::EndOfStage.new(:ipc_worker)
+            when :shutdown
+              return Minigun::EndOfStage.new(:ipc_worker)
+            end
+          end
+        rescue EOFError, IOError
+          # Pipe closed, return EndOfStage
+          return Minigun::EndOfStage.new(:ipc_worker)
+        end
+      end
+
+      # IPC-backed output queue that writes results back to parent via IPC pipe
+      class IpcOutputQueue
+        def initialize(pipe_writer, stage_stats)
+          @pipe_writer = pipe_writer
+          @stage_stats = stage_stats
+        end
+
+        def <<(item)
+          # Send result back to parent via IPC
+          if item.nil?
+            Marshal.dump({ type: :no_result }, @pipe_writer)
+          else
+            Marshal.dump({ type: :result, result: item }, @pipe_writer)
+          end
+          @pipe_writer.flush
+          @stage_stats&.increment_produced
+          self
+        end
+
+        def to(_target_stage)
+          # For IPC workers, routing is handled by parent process
+          # Just return self as a proxy
+          self
+        end
+
+        def to_proc
+          proc { |item, to: nil| self << item }
+        end
+      end
+
       def distribute_work(input_queue, output_queue)
         worker_index = 0
+        result_threads = []
 
-        loop do
-          item = input_queue.pop
-          break if item.is_a?(Minigun::EndOfStage)
-
-          # Round-robin distribution to workers
-          worker = @workers[worker_index % @workers.size]
-          worker_index += 1
-
-          # Send item to worker via IPC
-          begin
-            Marshal.dump({ type: :item, item: item }, worker[:to_worker])
-            worker[:to_worker].flush
-
-            # Wait for worker response and read result via IPC pipe
-            read_result_from_pipe(worker[:from_worker], output_queue)
-          rescue IOError, EOFError => e
-            warn "[Minigun] Lost connection to worker #{worker[:pid]}: #{e.message}"
-            raise
+        # Start result collection threads for each worker
+        @workers.each do |worker|
+          result_threads << Thread.new do
+            begin
+              loop do
+                read_result_from_pipe(worker[:from_worker], output_queue)
+              end
+            rescue EOFError, IOError => e
+              # Worker closed pipe, done (suppress warnings for normal EOF)
+              # Only warn if it's not a normal EOF
+              warn "[Minigun] Worker #{worker[:pid]} pipe closed: #{e.message}" unless e.is_a?(EOFError)
+            end
           end
+        end
+
+        # Distribute items to workers round-robin
+        begin
+          loop do
+            item = input_queue.pop
+
+            if item.is_a?(Minigun::EndOfStage)
+              # Send EndOfStage to all workers
+              @workers.each do |worker|
+                begin
+                  Marshal.dump({ type: :end_of_stage }, worker[:to_worker])
+                  worker[:to_worker].flush
+                rescue IOError, EOFError
+                  # Worker already closed, ignore
+                end
+              end
+              break
+            end
+
+            # Round-robin distribution to workers
+            worker = @workers[worker_index % @workers.size]
+            worker_index += 1
+
+            # Send item to worker via IPC
+            begin
+              Marshal.dump({ type: :item, item: item }, worker[:to_worker])
+              worker[:to_worker].flush
+            rescue IOError, EOFError => e
+              warn "[Minigun] Lost connection to worker #{worker[:pid]}: #{e.message}"
+              raise
+            end
+          end
+        ensure
+          # Wait for all result collection threads to finish
+          result_threads.each(&:join)
         end
       end
     end

@@ -10,14 +10,15 @@ The **Copy-On-Write (COW) Fork Pool Executor** maintains a pool of forked proces
 ### How It Works
 1. Items flow into the stage's input queue
 2. Executor forks a new process for each item (up to `max_size` concurrent forks)
-3. Child process inherits parent's memory via COW (no serialization)
-4. Child processes the item and writes to output queue
+3. Child process inherits parent's memory via COW (no serialization for input)
+4. Child processes the item and sends result back via IPC pipe
 5. Child exits immediately after processing
-6. Parent reaps completed children and forks for new items
+6. Parent reaps completed children, reads results via IPC, and forks for new items
 
 ### Memory Model
 - **Copy-On-Write**: Memory pages are shared between parent and child until modified
-- **No Serialization**: Data is accessible directly in forked process
+- **No Serialization for Input**: Input item is accessible directly in forked process via COW
+- **IPC for Results**: Results and errors are returned to parent via IPC pipes (Marshal serialization)
 - **Ephemeral Workers**: Each fork handles one item then exits
 
 ### Concurrency
@@ -64,14 +65,14 @@ The **Inter-Process Communication (IPC) Fork Pool Executor** creates persistent 
 1. At stage startup, fork `max_size` persistent worker processes
 2. Create bidirectional IPC pipes for each worker
 3. Parent pulls items from input queue
-4. Parent distributes items to workers round-robin via IPC pipes
-5. Workers receive serialized items, process them, send results back via IPC
-6. Parent receives results and pushes to output queue
+4. Parent distributes items to workers round-robin via IPC pipes (Marshal serialization)
+5. Workers receive serialized items, process them, send results back via IPC pipes
+6. Parent receives results via IPC and pushes to output queue
 7. Workers persist until pipeline completes (graceful shutdown)
 
 ### Memory Model
 - **Process Isolation**: Each worker has independent memory
-- **Explicit IPC**: Data serialized through pipes using Marshal
+- **Explicit IPC**: All data (input and output) serialized through pipes using Marshal
 - **Persistent Workers**: Processes stay alive, handle multiple items
 
 ### Concurrency
@@ -113,26 +114,39 @@ end
 | Feature | COW Fork Pool | IPC Fork Pool |
 |---------|---------------|---------------|
 | **Worker Lifetime** | Ephemeral (1 item) | Persistent (entire stage) |
-| **Memory Sharing** | Yes (COW) | No (isolated) |
-| **Serialization** | None | Marshal via pipes |
+| **Input Communication** | COW (no serialization) | IPC pipes (Marshal) |
+| **Output Communication** | IPC pipes (Marshal) | IPC pipes (Marshal) |
+| **Memory Sharing** | Yes (COW for input) | No (isolated) |
+| **Serialization** | Results only (via IPC) | Input & output (via IPC) |
 | **Fork Overhead** | High (per item) | Low (once at startup) |
-| **Process Isolation** | Moderate | Strong |
+| **Process Isolation** | Moderate (shared input) | Strong (isolated) |
 | **Best Use Case** | Large shared read-only data | Independent isolated processing |
 | **Concurrency Model** | Pool of ephemeral forks | Pool of persistent workers |
-| **Communication** | Direct memory access | IPC pipes |
+| **Result Communication** | IPC pipes | IPC pipes |
 
 ## Implementation Details
+
+### Shared Architecture
+Both `CowForkPoolExecutor` and `IpcForkPoolExecutor` inherit from `AbstractForkExecutor`, which provides:
+- Common IPC result communication logic via pipes
+- Error handling and propagation from child to parent
+- Marshal-based serialization for results and errors
+- Protocol: `{ type: :result/:error/:no_result, ... }` messages
 
 ### COW Fork Pool
 - Uses `Process.fork` for each item
 - Tracks active PIDs in a hash
 - Non-blocking reap with `Process.wait2(..., Process::WNOHANG)`
 - Respects pool size limit before forking
-- Child writes directly to output queue (inherited reference)
+- Input item shared via COW (read-only access)
+- Results sent back via IPC pipe (inherited from `AbstractForkExecutor`)
+- Each child exits immediately after processing one item
 
 ### IPC Fork Pool
 - Pre-forks workers at stage startup
 - Creates bidirectional pipes (`IO.pipe`) for each worker
+- Input items serialized and sent via IPC (`{ type: :item, item: ... }`)
+- Results sent back via IPC pipe (inherited from `AbstractForkExecutor`)
 - Message protocol: `{ type: :item/:result/:error/:shutdown, ... }`
 - Round-robin distribution from parent to workers
 - Synchronous request/response per item

@@ -46,6 +46,7 @@ RSpec.describe Minigun::Execution::Executor do
              name: :test,
              execute_with_emit: nil,
              execute: nil,
+             block: nil,
              respond_to?: false)
     end
     let(:stage_stats) { double('stage_stats', start!: nil, start_time: nil, increment_consumed: nil, increment_produced: nil, record_latency: nil) }
@@ -206,6 +207,7 @@ RSpec.describe Minigun::Execution::ThreadPoolExecutor do
              name: :test,
              execute_with_emit: nil,
              execute: nil,
+             block: nil,
              respond_to?: false)
     end
     let(:stage_stats) { double('stage_stats', start!: nil, start_time: nil, increment_consumed: nil, increment_produced: nil, record_latency: nil) }
@@ -301,6 +303,7 @@ RSpec.describe Minigun::Execution::CowForkPoolExecutor, skip: Gem.win_platform? 
              name: :test,
              execute_with_emit: nil,
              execute: nil,
+             block: nil,
              respond_to?: false)
     end
     let(:stage_stats) { double('stage_stats', start!: nil, start_time: nil, increment_consumed: nil, increment_produced: nil, record_latency: nil) }
@@ -377,6 +380,7 @@ RSpec.describe Minigun::Execution::CowForkPoolExecutor, skip: Gem.win_platform? 
              name: :test,
              execute_with_emit: nil,
              execute: nil,
+             block: nil,
              respond_to?: false)
     end
     let(:stage_stats) { double('stage_stats', start!: nil, start_time: nil, increment_consumed: nil, increment_produced: nil, record_latency: nil) }
@@ -420,7 +424,7 @@ RSpec.describe Minigun::Execution::CowForkPoolExecutor, skip: Gem.win_platform? 
     end
 
     it 'respects max_size concurrency limit' do
-      slow_stage = double('stage', name: :test)
+      slow_stage = double('stage', name: :test, block: nil, respond_to?: false)
       input_queue = double('input_queue')
       output_queue = double('output_queue')
       allow(input_queue).to receive(:pop).and_return(Minigun::EndOfStage.new(:test))
@@ -473,6 +477,7 @@ RSpec.describe Minigun::Execution::IpcForkPoolExecutor, skip: Gem.win_platform? 
              name: :test,
              execute_with_emit: nil,
              execute: nil,
+             block: nil,
              respond_to?: false)
     end
     let(:stage_stats) { double('stage_stats', start!: nil, start_time: nil, increment_consumed: nil, increment_produced: nil, record_latency: nil) }
@@ -517,7 +522,7 @@ RSpec.describe Minigun::Execution::IpcForkPoolExecutor, skip: Gem.win_platform? 
     end
 
     it 'respects max_size concurrency limit' do
-      slow_stage = double('stage', name: :test)
+      slow_stage = double('stage', name: :test, block: nil, respond_to?: false)
       input_queue = double('input_queue')
       output_queue = double('output_queue')
       allow(input_queue).to receive(:pop).and_return(Minigun::EndOfStage.new(:test))

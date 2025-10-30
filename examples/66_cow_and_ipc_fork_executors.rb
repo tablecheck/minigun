@@ -21,7 +21,7 @@ puts "COW Fork Executor Example"
 puts "=" * 80
 
 class CowForkExample
-  include Minigun::Task
+  include Minigun::DSL
 
   # Use COW fork executor
   execution :cow_fork, max: 2
@@ -68,7 +68,7 @@ puts "IPC Fork Executor Example"
 puts "=" * 80
 
 class IpcForkExample
-  include Minigun::Task
+  include Minigun::DSL
 
   # Use IPC fork executor
   execution :ipc_fork, max: 2

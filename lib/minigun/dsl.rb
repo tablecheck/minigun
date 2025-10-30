@@ -22,6 +22,11 @@ module Minigun
         _minigun_task.set_config(:max_retries, value)
       end
 
+      # Set default execution context for all stages
+      def execution(type, max: nil)
+        _minigun_task.set_config(:_default_execution_context, { type: type, pool_size: max })
+      end
+
       # Pipeline block - stores block for lazy instance-level evaluation
       # All pipeline definitions (both unnamed and named) are stored and evaluated at instance time
       # This allows blocks to access instance variables correctly
@@ -329,6 +334,14 @@ module Minigun
         elsif _current_execution_context
           # Use current context from stack
           options[:_execution_context] = _current_execution_context
+        elsif @pipeline && @pipeline.config[:_default_execution_context]
+          # Use default execution context from config
+          default_ctx = @pipeline.config[:_default_execution_context]
+          options[:_execution_context] = {
+            type: default_ctx[:type],
+            pool_size: default_ctx[:pool_size],
+            mode: :pool
+          }
         end
 
         # Normalize the type if an execution context was set
