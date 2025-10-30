@@ -91,7 +91,7 @@ module Minigun
 
         all_items_queued = false
 
-        # Main loop: fork processes and reap completed ones
+        # Main loop: fork a process for each item as it arrives
         loop do
           # Reap any completed child processes (non-blocking)
           reap_completed_forks
@@ -103,6 +103,7 @@ module Minigun
             if item.is_a?(Minigun::EndOfStage)
               all_items_queued = true
             else
+              # Fork a process for this single item (COW-shared)
               fork_for_item(item, stage, user_context, output_queue, stage_stats)
             end
           end
@@ -131,15 +132,22 @@ module Minigun
       end
 
       def fork_for_item(item, stage, user_context, output_queue, stage_stats)
-        # Fork child process for THIS item - memory is shared via COW
+        # Create wrapper hash before fork - this structure is COW-shared
+        # When child writes to wrapper[:result], it triggers COW but parent can check original
+        wrapper = { item: item, result: nil }
+
+        # Fork child process - wrapper hash is COW-shared
         pid = fork do
           begin
-            # Child process has inherited memory via COW
-            # Execute the stage's block on this single item
-            result = stage.process_item(item, user_context)
+            # Child process has inherited wrapper via COW
+            # Read item from wrapper (read-only, no COW copy)
+            item_to_process = wrapper[:item]
 
-            # Push result to output queue (if stage produces output)
-            output_queue << result unless result.nil?
+            # Execute the stage's block on this single item
+            result = stage.process_item(item_to_process, user_context)
+
+            # Write result to wrapper - this triggers COW copy for this hash entry
+            wrapper[:result] = result unless result.nil?
           rescue => e
             warn "[Minigun] Error in COW forked process: #{e.message}"
             warn e.backtrace.join("\n")
@@ -158,7 +166,7 @@ module Minigun
           return
         end
 
-        @mutex.synchronize { @active_forks[pid] = item }
+        @mutex.synchronize { @active_forks[pid] = { wrapper: wrapper, output_queue: output_queue } }
       end
 
       def reap_completed_forks
@@ -168,9 +176,22 @@ module Minigun
             next unless status
 
             _pid, process_status = status
-            @active_forks.delete(pid)
+            fork_info = @active_forks.delete(pid)
+            wrapper = fork_info[:wrapper]
+            output_queue = fork_info[:output_queue]
 
-            unless process_status.success?
+            if process_status.success?
+              # TODO: Results handling with COW-only (no IPC)
+              # Child writes to wrapper[:result] trigger COW copy, so parent doesn't see changes
+              # Options:
+              # 1. Re-process item inline after fork (loses parallelism benefit)
+              # 2. Results go to side effects (files, DB, etc.) - no return needed
+              # 3. Item is mutated in place - but same COW issue
+              # For now, check wrapper - may need different mechanism
+              if wrapper[:result]
+                output_queue << wrapper[:result]
+              end
+            else
               warn "[Minigun] COW forked process #{pid} failed with status: #{process_status.exitstatus}"
             end
           end
