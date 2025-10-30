@@ -362,7 +362,7 @@ RSpec.describe Minigun::Execution::CowForkPoolExecutor, skip: Gem.win_platform? 
         execution_pid = Process.pid
       end
 
-      executor.execute_stage(stage, user_context, input_queue, output_queue, stage_stats)
+      executor.execute_stage(stage, user_context, input_queue, output_queue)
       expect(execution_pid).not_to eq(calling_pid)
     end
 
@@ -373,7 +373,7 @@ RSpec.describe Minigun::Execution::CowForkPoolExecutor, skip: Gem.win_platform? 
       allow(stage).to receive(:execute)
 
       # Executor no longer returns results, stages write to output_queue
-      executor.execute_stage(stage, user_context, input_queue, output_queue, stage_stats)
+      executor.execute_stage(stage, user_context, input_queue, output_queue)
     end
 
     it 'propagates errors from child process' do
@@ -383,7 +383,7 @@ RSpec.describe Minigun::Execution::CowForkPoolExecutor, skip: Gem.win_platform? 
       allow(stage).to receive(:execute).and_raise(StandardError, 'boom')
 
       # Errors are caught and logged
-      executor.execute_stage(stage, user_context, input_queue, output_queue, stage_stats)
+      executor.execute_stage(stage, user_context, input_queue, output_queue)
     end
   end
 
@@ -395,7 +395,13 @@ RSpec.describe Minigun::Execution::CowForkPoolExecutor, skip: Gem.win_platform? 
 end
 
 RSpec.describe Minigun::Execution::CowForkPoolExecutor, skip: Gem.win_platform? do
-  let(:executor) { described_class.new(max_size: 2) }
+  let(:stage_ctx) do
+    dag = double('dag', terminal?: false)
+    pipeline = double('pipeline', name: 'test_pipeline', dag: dag, send: nil)
+    stage_stats = double('stage_stats', start!: nil, start_time: nil, increment_consumed: nil, increment_produced: nil, record_latency: nil)
+    double('stage_ctx', pipeline: pipeline, stage_name: :test, stage_stats: stage_stats, dag: dag)
+  end
+  let(:executor) { described_class.new(stage_ctx, max_size: 2) }
 
   describe '#initialize' do
     it 'sets max_size' do
@@ -419,7 +425,7 @@ RSpec.describe Minigun::Execution::CowForkPoolExecutor, skip: Gem.win_platform? 
       input_queue << 5
       input_queue << Minigun::EndOfStage.new(:test)
 
-      executor.execute_stage(stage, user_context, input_queue, output_queue, stage_stats)
+      executor.execute_stage(stage, user_context, input_queue, output_queue)
 
       result = output_queue.pop
       expect(result).to eq(10)
@@ -439,7 +445,7 @@ RSpec.describe Minigun::Execution::CowForkPoolExecutor, skip: Gem.win_platform? 
 
       # COW fork should propagate errors via IPC
       expect do
-        executor.execute_stage(stage, user_context, input_queue, output_queue, stage_stats)
+        executor.execute_stage(stage, user_context, input_queue, output_queue)
       end.to raise_error(/COW forked process failed.*boom/)
     end
 
@@ -463,7 +469,7 @@ RSpec.describe Minigun::Execution::CowForkPoolExecutor, skip: Gem.win_platform? 
       10.times { |i| input_queue << i }
       input_queue << Minigun::EndOfStage.new(:test)
 
-      executor.execute_stage(stage, user_context, input_queue, output_queue, stage_stats)
+      executor.execute_stage(stage, user_context, input_queue, output_queue)
 
       # All items should be processed
       results = []
@@ -480,7 +486,13 @@ RSpec.describe Minigun::Execution::CowForkPoolExecutor, skip: Gem.win_platform? 
 end
 
 RSpec.describe Minigun::Execution::IpcForkPoolExecutor, skip: Gem.win_platform? do
-  let(:executor) { described_class.new(max_size: 2) }
+  let(:stage_ctx) do
+    dag = double('dag', terminal?: false)
+    pipeline = double('pipeline', name: 'test_pipeline', dag: dag, send: nil)
+    stage_stats = double('stage_stats', start!: nil, start_time: nil, increment_consumed: nil, increment_produced: nil, record_latency: nil)
+    double('stage_ctx', pipeline: pipeline, stage_name: :test, stage_stats: stage_stats, dag: dag)
+  end
+  let(:executor) { described_class.new(stage_ctx, max_size: 2) }
 
   describe '#initialize' do
     it 'sets max_size' do
@@ -504,7 +516,7 @@ RSpec.describe Minigun::Execution::IpcForkPoolExecutor, skip: Gem.win_platform? 
       input_queue << 5
       input_queue << Minigun::EndOfStage.new(:test)
 
-      executor.execute_stage(stage, user_context, input_queue, output_queue, stage_stats)
+      executor.execute_stage(stage, user_context, input_queue, output_queue)
 
       result = output_queue.pop
       expect(result).to eq(10)

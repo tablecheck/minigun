@@ -77,7 +77,7 @@ RSpec.describe 'Fork Executors - Jepsen-style Tests', skip: Gem.win_platform? do
         stage = create_stage
         user_context = {}
 
-        executor.execute_stage(stage, user_context, input_queue, output_queue, stage_stats)
+        executor.execute_stage(stage, user_context, input_queue, output_queue)
 
         results = []
         results << output_queue.pop until output_queue.empty?
@@ -98,7 +98,7 @@ RSpec.describe 'Fork Executors - Jepsen-style Tests', skip: Gem.win_platform? do
 
           stage = create_stage
           executor_instance = Minigun::Execution.create_executor(executor_type, stage_ctx, max_size: pool_size)
-          executor_instance.execute_stage(stage, {}, input_queue, output_queue, stage_stats)
+          executor_instance.execute_stage(stage, {}, input_queue, output_queue)
 
           results = []
           results << output_queue.pop until output_queue.empty?
@@ -116,7 +116,7 @@ RSpec.describe 'Fork Executors - Jepsen-style Tests', skip: Gem.win_platform? do
         input_queue << Minigun::EndOfStage.new('test')
 
         stage = create_stage
-        executor.execute_stage(stage, {}, input_queue, output_queue, stage_stats)
+        executor.execute_stage(stage, {}, input_queue, output_queue)
 
         results = []
         results << output_queue.pop until output_queue.empty?
@@ -130,7 +130,7 @@ RSpec.describe 'Fork Executors - Jepsen-style Tests', skip: Gem.win_platform? do
         input_queue << Minigun::EndOfStage.new('test')
 
         stage = create_stage
-        executor.execute_stage(stage, {}, input_queue, output_queue, stage_stats)
+        executor.execute_stage(stage, {}, input_queue, output_queue)
 
         expect(output_queue.empty?).to be true
       end
@@ -142,7 +142,7 @@ RSpec.describe 'Fork Executors - Jepsen-style Tests', skip: Gem.win_platform? do
         input_queue << Minigun::EndOfStage.new('test')
 
         stage = create_stage
-        executor.execute_stage(stage, {}, input_queue, output_queue, stage_stats)
+        executor.execute_stage(stage, {}, input_queue, output_queue)
 
         expect(output_queue.pop).to eq(84)
         expect(output_queue.empty?).to be true
@@ -161,7 +161,7 @@ RSpec.describe 'Fork Executors - Jepsen-style Tests', skip: Gem.win_platform? do
         stage = create_stage
 
         start_time = Time.now
-        executor.execute_stage(stage, {}, input_queue, output_queue, stage_stats)
+        executor.execute_stage(stage, {}, input_queue, output_queue)
         elapsed = Time.now - start_time
 
         results = []
@@ -188,7 +188,7 @@ RSpec.describe 'Fork Executors - Jepsen-style Tests', skip: Gem.win_platform? do
         input_queue << Minigun::EndOfStage.new('test')
 
         stage = create_stage
-        executor.execute_stage(stage, {}, input_queue, output_queue, stage_stats)
+        executor.execute_stage(stage, {}, input_queue, output_queue)
 
         results = []
         results << output_queue.pop until output_queue.empty?
@@ -210,7 +210,7 @@ RSpec.describe 'Fork Executors - Jepsen-style Tests', skip: Gem.win_platform? do
           item * 2
         })
 
-        executor.execute_stage(stage, {}, input_queue, output_queue, stage_stats)
+        executor.execute_stage(stage, {}, input_queue, output_queue)
 
         results = []
         results << output_queue.pop until output_queue.empty?
@@ -238,13 +238,13 @@ RSpec.describe 'Fork Executors - Jepsen-style Tests', skip: Gem.win_platform? do
         if executor_type == :cow_fork
           # COW fork: one item per fork, so error kills the fork and propagates
           expect do
-            executor.execute_stage(stage, {}, input_queue, output_queue, stage_stats)
+            executor.execute_stage(stage, {}, input_queue, output_queue)
           end.to raise_error(/error/i)
         else
           # IPC fork: ConsumerStage catches errors and continues, so no exception raised
           # Errors are logged but processing continues
           expect do
-            executor.execute_stage(stage, {}, input_queue, output_queue, stage_stats)
+            executor.execute_stage(stage, {}, input_queue, output_queue)
           end.not_to raise_error
 
           # Verify that non-error items were still processed
@@ -267,7 +267,7 @@ RSpec.describe 'Fork Executors - Jepsen-style Tests', skip: Gem.win_platform? do
           item.even? ? nil : item * 2
         })
 
-        executor.execute_stage(stage, {}, input_queue, output_queue, stage_stats)
+        executor.execute_stage(stage, {}, input_queue, output_queue)
 
         results = []
         results << output_queue.pop until output_queue.empty?
@@ -288,7 +288,7 @@ RSpec.describe 'Fork Executors - Jepsen-style Tests', skip: Gem.win_platform? do
         input_queue << Minigun::EndOfStage.new('test')
 
         stage = create_stage
-        large_pool_executor.execute_stage(stage, {}, input_queue, output_queue, stage_stats)
+        large_pool_executor.execute_stage(stage, {}, input_queue, output_queue)
 
         results = []
         results << output_queue.pop until output_queue.empty?
@@ -313,7 +313,7 @@ RSpec.describe 'Fork Executors - Jepsen-style Tests', skip: Gem.win_platform? do
           item
         })
 
-        executor.execute_stage(stage, {}, input_queue, output_queue, stage_stats)
+        executor.execute_stage(stage, {}, input_queue, output_queue)
 
         results = []
         results << output_queue.pop until output_queue.empty?
@@ -347,7 +347,7 @@ RSpec.describe 'Fork Executors - Jepsen-style Tests', skip: Gem.win_platform? do
           item
         })
 
-        executor.execute_stage(stage, {}, input_queue, output_queue, stage_stats)
+        executor.execute_stage(stage, {}, input_queue, output_queue)
 
         results = []
         results << output_queue.pop until output_queue.empty?
@@ -371,7 +371,7 @@ RSpec.describe 'Fork Executors - Jepsen-style Tests', skip: Gem.win_platform? do
         stage = create_stage(processor: ->(item, _ctx) { item + 1 })
 
         start = Time.now
-        executor.execute_stage(stage, {}, input_queue, output_queue, stage_stats)
+        executor.execute_stage(stage, {}, input_queue, output_queue)
         elapsed = Time.now - start
 
         results = []
@@ -395,7 +395,7 @@ RSpec.describe 'Fork Executors - Jepsen-style Tests', skip: Gem.win_platform? do
 
         initial_children = process_children_count
 
-        executor.execute_stage(stage, {}, input_queue, output_queue, stage_stats)
+        executor.execute_stage(stage, {}, input_queue, output_queue)
 
         # Give processes time to clean up
         sleep 0.1
@@ -431,7 +431,7 @@ RSpec.describe 'Fork Executors - Jepsen-style Tests', skip: Gem.win_platform? do
           expects_context: true
         )
 
-        executor.execute_stage(stage, user_context, input_queue, output_queue, stage_stats)
+        executor.execute_stage(stage, user_context, input_queue, output_queue)
 
         results = []
         results << output_queue.pop until output_queue.empty?
@@ -463,7 +463,7 @@ RSpec.describe 'Fork Executors - Jepsen-style Tests', skip: Gem.win_platform? do
           expects_context: true
         )
 
-        executor.execute_stage(stage, user_context, input_queue, output_queue, stage_stats)
+        executor.execute_stage(stage, user_context, input_queue, output_queue)
 
         results = []
         results << output_queue.pop until output_queue.empty?
@@ -505,7 +505,7 @@ RSpec.describe 'Fork Executors - Jepsen-style Tests', skip: Gem.win_platform? do
 
         stage = create_stage(processor: processor)
 
-        executor.execute_stage(stage, {}, input_queue, output_queue, stage_stats)
+        executor.execute_stage(stage, {}, input_queue, output_queue)
 
         results = []
         results << output_queue.pop until output_queue.empty?
@@ -528,7 +528,7 @@ RSpec.describe 'Fork Executors - Jepsen-style Tests', skip: Gem.win_platform? do
           { item: item * 2, pid: Process.pid }
         })
 
-        executor.execute_stage(stage, {}, input_queue, output_queue, stage_stats)
+        executor.execute_stage(stage, {}, input_queue, output_queue)
 
         results = []
         results << output_queue.pop until output_queue.empty?
@@ -566,7 +566,7 @@ RSpec.describe 'Fork Executors - Jepsen-style Tests', skip: Gem.win_platform? do
           item * 2
         })
 
-        executor.execute_stage(stage, {}, input_queue, output_queue, stage_stats)
+        executor.execute_stage(stage, {}, input_queue, output_queue)
 
         results = []
         results << output_queue.pop until output_queue.empty?
@@ -597,7 +597,7 @@ RSpec.describe 'Fork Executors - Jepsen-style Tests', skip: Gem.win_platform? do
           item
         })
 
-        executor.execute_stage(stage, {}, input_queue, output_queue, stage_stats)
+        executor.execute_stage(stage, {}, input_queue, output_queue)
 
         results = []
         results << output_queue.pop until output_queue.empty?
@@ -619,7 +619,7 @@ RSpec.describe 'Fork Executors - Jepsen-style Tests', skip: Gem.win_platform? do
         input_queue << Minigun::EndOfStage.new('test')
 
         stage = create_stage
-        executor.execute_stage(stage, {}, input_queue, output_queue, stage_stats)
+        executor.execute_stage(stage, {}, input_queue, output_queue)
 
         results = []
         results << output_queue.pop until output_queue.empty?
