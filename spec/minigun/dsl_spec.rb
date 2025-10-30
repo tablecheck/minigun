@@ -131,8 +131,8 @@ RSpec.describe Minigun::DSL do
         include Minigun::DSL
 
         pipeline do
-          producer(:test_producer) do
-            5.times { |i| emit(i) }
+          producer(:test_producer) do |output|
+            5.times { |i| output << i }
           end
 
           consumer(:test_consumer) do |item|

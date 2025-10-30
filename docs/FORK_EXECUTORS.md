@@ -44,8 +44,8 @@ class DataProcessor
   end
 
   pipeline do
-    producer :generate do
-      items.each { |item| emit(item) }
+    producer :generate do |output|
+      items.each { |item| output << item }
     end
 
     processor :process_with_cow do |item|
@@ -96,8 +96,8 @@ class ApiProcessor
   execution :ipc_fork, max: 8
 
   pipeline do
-    producer :fetch_jobs do
-      jobs.each { |job| emit(job) }
+    producer :fetch_jobs do |output|
+      jobs.each { |job| output << job }
     end
 
     processor :call_api do |job|

@@ -34,15 +34,15 @@ class CowForkExample
   end
 
   pipeline do
-    producer :generate do
-      5.times { |i| emit(i) }
+    producer :generate do |output|
+      5.times { |i| output << i }
     end
 
-    processor :process_with_cow do |item|
+    processor :process_with_cow do |item, output|
       # Access shared data without serialization overhead
       # Child process can read @shared_data via COW
       sum = @shared_data.take(100).sum
-      { item: item, shared_sum: sum, pid: Process.pid }
+      output << { item: item, shared_sum: sum, pid: Process.pid }
     end
 
     consumer :collect do |result|
@@ -80,14 +80,14 @@ class IpcForkExample
   end
 
   pipeline do
-    producer :generate do
-      5.times { |i| emit({ id: i, value: i * 10 }) }
+    producer :generate do |output|
+      5.times { |i| output << { id: i, value: i * 10 } }
     end
 
-    processor :process_with_ipc do |item|
+    processor :process_with_ipc do |item, output|
       # Data is serialized through IPC pipes
       # Strong process isolation
-      {
+      output << {
         id: item[:id],
         value: item[:value],
         computed: item[:value] ** 2,

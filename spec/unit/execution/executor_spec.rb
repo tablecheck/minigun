@@ -384,7 +384,7 @@ RSpec.describe Minigun::Execution::CowForkPoolExecutor, skip: Gem.win_platform? 
       input_queue << Minigun::EndOfStage.new(:test)
 
       executor.execute_stage(stage, user_context, input_queue, output_queue, stage_stats)
-      
+
       result = output_queue.pop
       expect(result).to eq(10)
     end
@@ -409,7 +409,7 @@ RSpec.describe Minigun::Execution::CowForkPoolExecutor, skip: Gem.win_platform? 
 
     it 'respects max_size concurrency limit' do
       processed_items = Queue.new
-      
+
       # Real stage that tracks which items it processes
       stage = Minigun::ConsumerStage.new(
         name: :test,
@@ -422,13 +422,13 @@ RSpec.describe Minigun::Execution::CowForkPoolExecutor, skip: Gem.win_platform? 
 
       input_queue = Queue.new
       output_queue = Queue.new
-      
+
       # Queue up more items than max_size to test concurrency limiting
       10.times { |i| input_queue << i }
       input_queue << Minigun::EndOfStage.new(:test)
 
       executor.execute_stage(stage, user_context, input_queue, output_queue, stage_stats)
-      
+
       # All items should be processed
       results = []
       10.times { results << output_queue.pop(true) rescue nil }
@@ -469,7 +469,7 @@ RSpec.describe Minigun::Execution::IpcForkPoolExecutor, skip: Gem.win_platform? 
       input_queue << Minigun::EndOfStage.new(:test)
 
       executor.execute_stage(stage, user_context, input_queue, output_queue, stage_stats)
-      
+
       result = output_queue.pop
       expect(result).to eq(10)
     end
@@ -493,13 +493,13 @@ RSpec.describe Minigun::Execution::IpcForkPoolExecutor, skip: Gem.win_platform? 
 
       input_queue = Queue.new
       output_queue = Queue.new
-      
+
       # Queue up more items than max_size to test concurrency
       10.times { |i| input_queue << i }
       input_queue << Minigun::EndOfStage.new(:test)
 
       executor.execute_stage(stage, user_context, input_queue, output_queue, stage_stats)
-      
+
       # All items should be processed
       results = []
       10.times { results << output_queue.pop(true) rescue nil }
@@ -515,13 +515,13 @@ RSpec.describe Minigun::Execution::IpcForkPoolExecutor, skip: Gem.win_platform? 
 
       input_queue = Queue.new
       output_queue = Queue.new
-      
+
       # Send multiple items per worker to verify streaming
       20.times { |i| input_queue << i }
       input_queue << Minigun::EndOfStage.new(:test)
 
       executor.execute_stage(stage, user_context, input_queue, output_queue, stage_stats)
-      
+
       # All 20 items should be processed by max_size=2 workers
       results = []
       20.times { results << output_queue.pop(true) rescue nil }

@@ -34,16 +34,15 @@ class MyPublisher
 
   pipeline do
     # Generate items
-    producer :fetch_ids do
+    producer :fetch_ids do |output|
       Model.find_each do |record|
-        emit(record.id)
+        output << record.id
       end
     end
 
     # Optional: transform items
-    processor :enrich do |id|
-      enriched_data = fetch_data(id)
-      emit(enriched_data)
+    consumer :enrich do |id, output|
+      output << fetch_data(id)
     end
 
     # Process in parallel
@@ -131,7 +130,7 @@ class ElasticPublisher
   pipeline do
     producer :fetch_ids do
       Customer.where('updated_at > ?', 1.hour.ago).find_each do |customer|
-        emit([Customer, customer.id])
+        output << [Customer, customer.id]
       end
     end
 
