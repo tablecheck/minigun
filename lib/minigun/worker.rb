@@ -12,9 +12,6 @@ module Minigun
       @stage_name = stage.name
       @config = config
       @thread = nil
-
-      # Create executor only for non-producers
-      @executor = create_executor_if_needed
     end
 
     # Start the worker thread
@@ -49,7 +46,7 @@ module Minigun
       log_error "Unhandled error: #{e.message}"
       log_error e.backtrace.join("\n")
     ensure
-      @executor&.shutdown
+      stage_ctx&.executor&.shutdown
     end
 
     def handle_disconnected_stage(stage_ctx) # rubocop:disable Naming/PredicateMethod
@@ -91,7 +88,8 @@ module Minigun
       is_terminal = dag.terminal?(@stage_name)
       stage_stats = @pipeline.stats.for_stage(@stage_name, is_terminal: is_terminal)
 
-      StageContext.new(
+      # Create stage context WITHOUT executor first
+      stage_ctx = StageContext.new(
         pipeline: @pipeline,
         stage_name: @stage_name,
         dag: dag,
@@ -102,20 +100,25 @@ module Minigun
         input_queue: stage_input_queues[@stage_name],
         sources_expected: sources_expected,
         sources_done: Set.new,
-        executor: @executor
+        executor: nil
       )
+
+      # Create executor with stage_ctx (only for non-autonomous stages)
+      stage_ctx.executor = create_executor_if_needed(stage_ctx)
+
+      stage_ctx
     end
 
-    def create_executor_if_needed
+    def create_executor_if_needed(stage_ctx)
       return nil if @stage.run_mode == :autonomous
 
       exec_ctx = @stage.execution_context
-      return Execution::InlineExecutor.new if exec_ctx.nil?
+      return Execution::InlineExecutor.new(stage_ctx) if exec_ctx.nil?
 
       type = exec_ctx[:type]
       pool_size = exec_ctx[:pool_size] || exec_ctx[:max] || default_pool_size(type)
 
-      Execution.create_executor(type: type, max_size: pool_size)
+      Execution.create_executor(type: type, max_size: pool_size, stage_ctx: stage_ctx)
     end
 
     # TODO: Move this elsewhere? DSL class?

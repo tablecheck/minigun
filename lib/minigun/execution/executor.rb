@@ -7,10 +7,20 @@ module Minigun
     # NOTE: Stages now manage their own execution loops internally via execute(context, input_queue, output_queue).
     # Executors define HOW that execution happens (inline, threaded, etc).
     class Executor
+      attr_reader :stage_ctx
+
+      def initialize(stage_ctx)
+        @stage_ctx = stage_ctx
+      end
+
       # Execute the actual stage logic using this executor's strategy
       # Subclasses implement this to control HOW execution happens
-      def execute_stage(stage, user_context, input_queue, output_queue, stage_stats)
-        raise NotImplementedError, "#{self.class}#execute_with_strategy must be implemented"
+      # @param stage [Stage] The stage to execute
+      # @param user_context [Object] User context for instance_exec
+      # @param input_queue [Queue] Input queue for items
+      # @param output_queue [Queue] Output queue for results
+      def execute_stage(stage, user_context, input_queue, output_queue)
+        raise NotImplementedError, "#{self.class}#execute_stage must be implemented"
       end
 
       # Shutdown and cleanup resources
@@ -21,8 +31,8 @@ module Minigun
 
     # Inline execution - no concurrency, executes immediately in current thread
     class InlineExecutor < Executor
-      def execute_stage(stage, user_context, input_queue, output_queue, stage_stats)
-        stage.execute(user_context, input_queue, output_queue, stage_stats)
+      def execute_stage(stage, user_context, input_queue, output_queue)
+        stage.execute(user_context, input_queue, output_queue, @stage_ctx.stage_stats)
       end
     end
 
@@ -30,18 +40,18 @@ module Minigun
     class ThreadPoolExecutor < Executor
       attr_reader :max_size
 
-      def initialize(max_size:)
-        super()
+      def initialize(stage_ctx, max_size:)
+        super(stage_ctx)
         @max_size = max_size
         @active_threads = []
         @mutex = Mutex.new
       end
 
-      def execute_stage(stage, user_context, input_queue, output_queue, stage_stats)
+      def execute_stage(stage, user_context, input_queue, output_queue)
         wait_for_slot
 
         thread = Thread.new do
-          stage.execute(user_context, input_queue, output_queue, stage_stats)
+          stage.execute(user_context, input_queue, output_queue, @stage_ctx.stage_stats)
         ensure
           @mutex.synchronize { @active_threads.delete(Thread.current) }
         end
@@ -73,8 +83,8 @@ module Minigun
     class AbstractForkExecutor < Executor
       attr_reader :max_size
 
-      def initialize(max_size:)
-        super()
+      def initialize(stage_ctx, max_size:)
+        super(stage_ctx)
         @max_size = max_size
         @mutex = Mutex.new
       end
@@ -141,16 +151,19 @@ module Minigun
     # Memory pages are shared between parent and child until modified (COW).
     # Input item is COW-shared, but results are sent via IPC pipes.
     class CowForkPoolExecutor < AbstractForkExecutor
-      def initialize(max_size:)
-        super(max_size: max_size)
+      def initialize(stage_ctx, max_size:)
+        super(stage_ctx, max_size: max_size)
         @active_forks = {} # pid => fork_info
       end
 
-      def execute_stage(stage, user_context, input_queue, output_queue, stage_stats)
+      def execute_stage(stage, user_context, input_queue, output_queue)
         unless Process.respond_to?(:fork)
           warn '[Minigun] Process forking not available, falling back to inline'
-          return stage.execute(user_context, input_queue, output_queue, stage_stats)
+          return stage.execute(user_context, input_queue, output_queue, @stage_ctx.stage_stats)
         end
+
+        # Execute before_fork hooks in parent process (once, before any forks)
+        @stage_ctx.pipeline&.send(:execute_stage_hooks, :before_fork, stage.name)
 
         all_items_queued = false
 
@@ -167,7 +180,7 @@ module Minigun
               all_items_queued = true
             else
               # Fork a process for this single item (COW-shared)
-              fork_for_item(item, stage, user_context, output_queue, stage_stats)
+              fork_for_item(item, stage, user_context, output_queue)
             end
           end
 
@@ -194,15 +207,21 @@ module Minigun
         @mutex.synchronize { @active_forks.size }
       end
 
-      def fork_for_item(item, stage, user_context, output_queue, stage_stats)
+      def fork_for_item(item, stage, user_context, output_queue)
         # Create pipe for IPC communication (results only - item is COW-shared)
         reader, writer = IO.pipe
+
+        stage_stats = @stage_ctx.stage_stats
+        pipeline = @stage_ctx.pipeline
 
         # Fork child process - item is COW-shared (read-only, no copy until modified)
         pid = fork do
           reader.close # Close read end in child
 
           begin
+            # Execute after_fork hooks in child process
+            pipeline&.send(:execute_stage_hooks, :after_fork, stage.name)
+
             # Child process has inherited item via COW
             # Execute the stage's block on this single item
             # Create a capture queue to collect results written to output_queue
@@ -312,19 +331,22 @@ module Minigun
     # Workers continuously pull items, process them, and send results back.
     # Data is serialized through pipes for both input and output, providing strong process isolation.
     class IpcForkPoolExecutor < AbstractForkExecutor
-      def initialize(max_size:)
-        super(max_size: max_size)
+      def initialize(stage_ctx, max_size:)
+        super(stage_ctx, max_size: max_size)
         @workers = []
       end
 
-      def execute_stage(stage, user_context, input_queue, output_queue, stage_stats)
+      def execute_stage(stage, user_context, input_queue, output_queue)
         unless Process.respond_to?(:fork)
           warn '[Minigun] Process forking not available, falling back to inline'
-          return stage.execute(user_context, input_queue, output_queue, stage_stats)
+          return stage.execute(user_context, input_queue, output_queue, @stage_ctx.stage_stats)
         end
 
+        # Execute before_fork hooks in parent process (before spawning workers)
+        @stage_ctx.pipeline&.send(:execute_stage_hooks, :before_fork, stage.name)
+
         # Spawn persistent worker processes
-        spawn_workers(stage, user_context, stage_stats)
+        spawn_workers(stage, user_context)
 
         # Distribute items to workers
         begin
@@ -372,7 +394,10 @@ module Minigun
 
       private
 
-      def spawn_workers(stage, user_context, stage_stats)
+      def spawn_workers(stage, user_context)
+        stage_stats = @stage_ctx.stage_stats
+        pipeline = @stage_ctx.pipeline
+
         @max_size.times do
           # Create bidirectional pipes for IPC
           parent_read, child_write = IO.pipe
@@ -383,7 +408,7 @@ module Minigun
             parent_read.close
             parent_write.close
 
-            worker_loop(stage, user_context, stage_stats, child_read, child_write)
+            worker_loop(stage, user_context, stage_stats, child_read, child_write, pipeline)
           end
 
           if !pid
@@ -407,7 +432,10 @@ module Minigun
         end
       end
 
-      def worker_loop(stage, user_context, stage_stats, from_parent, to_parent)
+      def worker_loop(stage, user_context, stage_stats, from_parent, to_parent, pipeline)
+        # Execute after_fork hooks in child process
+        pipeline&.send(:execute_stage_hooks, :after_fork, stage.name)
+
         # Create IPC-backed input queue that reads from parent via IPC
         ipc_input_queue = Minigun::IpcInputQueue.new(from_parent, stage.name)
 
@@ -492,37 +520,37 @@ module Minigun
 
     # Ractor pool executor - manages ractor execution
     class RactorPoolExecutor < Executor
-      def initialize(max_size:)
-        super()
+      def initialize(stage_ctx, max_size:)
+        super(stage_ctx)
         @max_size = max_size
-        @fallback = ThreadPoolExecutor.new(max_size: max_size)
+        @fallback = ThreadPoolExecutor.new(stage_ctx, max_size: max_size)
       end
 
-      def execute_stage(stage, user_context, input_queue, output_queue, stage_stats)
+      def execute_stage(stage, user_context, input_queue, output_queue)
         unless defined?(::Ractor)
           warn '[Minigun] Ractors not available, falling back to thread pool'
-          return @fallback.send(:execute_stage, stage, user_context, input_queue, output_queue, stage_stats)
+          return @fallback.execute_stage(stage, user_context, input_queue, output_queue)
         end
 
         # NOTE: Ractors have similar IPC challenges as process pools
         # Fall back to threads for now
-        @fallback.send(:execute_stage, stage, user_context, input_queue, output_queue, stage_stats)
+        @fallback.execute_stage(stage, user_context, input_queue, output_queue)
       end
     end
 
     # Factory for creating executors
-    def self.create_executor(type:, max_size:)
+    def self.create_executor(type:, max_size:, stage_ctx:)
       case type
       when :inline
-        InlineExecutor.new
+        InlineExecutor.new(stage_ctx)
       when :thread
-        ThreadPoolExecutor.new(max_size: max_size)
+        ThreadPoolExecutor.new(stage_ctx, max_size: max_size)
       when :cow_fork
-        CowForkPoolExecutor.new(max_size: max_size)
+        CowForkPoolExecutor.new(stage_ctx, max_size: max_size)
       when :ipc_fork
-        IpcForkPoolExecutor.new(max_size: max_size)
+        IpcForkPoolExecutor.new(stage_ctx, max_size: max_size)
       when :ractor
-        RactorPoolExecutor.new(max_size: max_size)
+        RactorPoolExecutor.new(stage_ctx, max_size: max_size)
       else
         raise ArgumentError, "Unknown executor type: #{type}. Valid types: :inline, :thread, :cow_fork, :ipc_fork, :ractor"
       end

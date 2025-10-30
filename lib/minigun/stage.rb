@@ -217,9 +217,6 @@ module Minigun
     end
 
     def run_stage(stage_ctx)
-      # Store stage_stats for access during execute
-      stage_stats = stage_ctx.stage_stats
-
       # Execute before hooks
       stage_ctx.pipeline.send(:execute_stage_hooks, :before, stage_ctx.stage_name)
 
@@ -229,7 +226,7 @@ module Minigun
 
       # Execute via executor (defines HOW: inline/threaded/process)
       context = stage_ctx.pipeline.context
-      stage_ctx.executor.execute_stage(self, context, input_queue, output_queue, stage_stats)
+      stage_ctx.executor.execute_stage(self, context, input_queue, output_queue)
 
       # Execute after hooks
       stage_ctx.pipeline.send(:execute_stage_hooks, :after, stage_ctx.stage_name)
