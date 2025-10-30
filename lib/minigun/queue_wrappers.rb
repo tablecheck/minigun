@@ -92,4 +92,83 @@ module Minigun
       end
     end
   end
+
+  # IPC-backed input queue that reads items from parent via IPC pipe
+  # Used by IpcForkPoolExecutor workers to receive items from parent process
+  class IpcInputQueue
+    def initialize(pipe_reader, stage_name)
+      @pipe_reader = pipe_reader
+      @stage_name = stage_name
+      @buffer = []
+    end
+
+    def pop
+      # Return buffered item if available
+      return @buffer.shift unless @buffer.empty?
+
+      # Read from IPC pipe
+      loop do
+        message = Marshal.load(@pipe_reader)
+
+        case message[:type]
+        when :item
+          return message[:item]
+        when :end_of_stage, :shutdown
+          return EndOfStage.new(@stage_name)
+        end
+      end
+    rescue EOFError, IOError
+      # Pipe closed, return EndOfStage
+      return EndOfStage.new(@stage_name)
+    end
+  end
+
+  # IPC-backed output queue that writes results back to parent via IPC pipe
+  # Used by IpcForkPoolExecutor workers to send results to parent process
+  class IpcOutputQueue
+    def initialize(pipe_writer, stage_stats)
+      @pipe_writer = pipe_writer
+      @stage_stats = stage_stats
+    end
+
+    def <<(item)
+      # Send result back to parent via IPC
+      begin
+        if item.nil?
+          Marshal.dump({ type: :no_result }, @pipe_writer)
+        else
+          Marshal.dump({ type: :result, result: item }, @pipe_writer)
+        end
+        @pipe_writer.flush
+        @stage_stats&.increment_produced
+      rescue TypeError, ArgumentError => e
+        # Item contains non-serializable objects (e.g., IO, Proc, etc.)
+        # Log warning but don't crash - this is a data issue, not a system error
+        Minigun.logger.warn "[Minigun] Cannot serialize result for IPC: #{e.message}. Result type: #{item.class}"
+        # Send an error notification instead
+        begin
+          Marshal.dump({
+            type: :serialization_error,
+            error: "Cannot serialize result: #{e.message}",
+            item_type: item.class.to_s
+          }, @pipe_writer)
+          @pipe_writer.flush
+        rescue
+          # If we can't even send the error, pipe is broken
+          raise
+        end
+      end
+      self
+    end
+
+    def to(_target_stage)
+      # For IPC workers, routing is handled by parent process
+      # Just return self as a proxy
+      self
+    end
+
+    def to_proc
+      proc { |item, to: nil| self << item }
+    end
+  end
 end

@@ -109,6 +109,10 @@ module Minigun
           exception = RuntimeError.new("COW forked process failed: #{error_msg}")
           exception.set_backtrace(backtrace) if backtrace
           raise exception
+        when :serialization_error
+          # Result couldn't be serialized (contains IO, Proc, etc.)
+          # Log warning but continue - item is skipped
+          warn "[Minigun] Skipped non-serializable result: #{response[:error]} (type: #{response[:item_type]})"
         when :no_result
           # Child processed but produced no output
         end
@@ -405,10 +409,10 @@ module Minigun
 
       def worker_loop(stage, user_context, stage_stats, from_parent, to_parent)
         # Create IPC-backed input queue that reads from parent via IPC
-        ipc_input_queue = IpcInputQueue.new(from_parent)
+        ipc_input_queue = Minigun::IpcInputQueue.new(from_parent, stage.name)
 
         # Create IPC-backed output queue that writes results back to parent via IPC
-        ipc_output_queue = IpcOutputQueue.new(to_parent, stage_stats)
+        ipc_output_queue = Minigun::IpcOutputQueue.new(to_parent, stage_stats)
 
         begin
           # Run the stage's execute method with IPC-backed queues
@@ -424,66 +428,6 @@ module Minigun
         from_parent.close rescue nil
         to_parent.close rescue nil
         exit! 0
-      end
-
-      # IPC-backed input queue that reads items from parent via IPC pipe
-      class IpcInputQueue
-        def initialize(pipe_reader)
-          @pipe_reader = pipe_reader
-          @buffer = []
-        end
-
-        def pop
-          # Return buffered item if available
-          return @buffer.shift unless @buffer.empty?
-
-          # Read from IPC pipe
-          loop do
-            message = Marshal.load(@pipe_reader)
-
-            case message[:type]
-            when :item
-              return message[:item]
-            when :end_of_stage
-              return Minigun::EndOfStage.new(:ipc_worker)
-            when :shutdown
-              return Minigun::EndOfStage.new(:ipc_worker)
-            end
-          end
-        rescue EOFError, IOError
-          # Pipe closed, return EndOfStage
-          return Minigun::EndOfStage.new(:ipc_worker)
-        end
-      end
-
-      # IPC-backed output queue that writes results back to parent via IPC pipe
-      class IpcOutputQueue
-        def initialize(pipe_writer, stage_stats)
-          @pipe_writer = pipe_writer
-          @stage_stats = stage_stats
-        end
-
-        def <<(item)
-          # Send result back to parent via IPC
-          if item.nil?
-            Marshal.dump({ type: :no_result }, @pipe_writer)
-          else
-            Marshal.dump({ type: :result, result: item }, @pipe_writer)
-          end
-          @pipe_writer.flush
-          @stage_stats&.increment_produced
-          self
-        end
-
-        def to(_target_stage)
-          # For IPC workers, routing is handled by parent process
-          # Just return self as a proxy
-          self
-        end
-
-        def to_proc
-          proc { |item, to: nil| self << item }
-        end
       end
 
       def distribute_work(input_queue, output_queue)
@@ -531,6 +475,9 @@ module Minigun
             begin
               Marshal.dump({ type: :item, item: item }, worker[:to_worker])
               worker[:to_worker].flush
+            rescue TypeError, ArgumentError => e
+              # Item contains non-serializable objects - skip it
+              warn "[Minigun] Cannot serialize item for IPC worker: #{e.message}. Item type: #{item.class}. Skipping."
             rescue IOError, EOFError => e
               warn "[Minigun] Lost connection to worker #{worker[:pid]}: #{e.message}"
               raise

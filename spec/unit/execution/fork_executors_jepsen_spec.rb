@@ -23,18 +23,29 @@ RSpec.describe 'Fork Executors - Jepsen-style Tests', skip: Gem.win_platform? do
   let(:stage_stats) { Minigun::Stats.new('test_stage') }
 
   # Helper to create a mock stage that processes items
-  def create_stage(name: 'test_stage', processor: nil)
-    processor ||= ->(item, _ctx) { item * 2 }
+  def create_stage(name: 'test_stage', processor: nil, expects_context: false)
+    processor ||= ->(item, output) { output << (item * 2) }
 
-    stage = double('stage',
-                   name: name,
-                   pipeline: pipeline)
-
-    allow(stage).to receive(:process_item) do |item, context|
-      processor.call(item, context)
-    end
-
-    stage
+    # Create real ConsumerStage with a block that processes (item, output)
+    # RSpec mocks don't work across forks, so we need real objects
+    # ConsumerStage#execute handles the input loop and calls block per item
+    Minigun::ConsumerStage.new(
+      name: name,
+      block: proc { |item, output_queue|
+        # Block is executed via instance_exec(user_context), so 'self' is the user context
+        # If expects_context=true, pass user context to processor; otherwise pass output_queue
+        result = if expects_context
+                   processor.call(item, self)
+                 else
+                   processor.call(item, output_queue)
+                 end
+        # If processor returns a value (instead of writing to output_queue), write it
+        # But don't try to write queue objects themselves (they contain IO pipes)
+        if result && result != output_queue && !result.is_a?(Minigun::OutputQueue) && !result.is_a?(Minigun::IpcOutputQueue)
+          output_queue << result
+        end
+      }
+    )
   end
 
   # Helper to verify all items processed exactly once
@@ -221,10 +232,23 @@ RSpec.describe 'Fork Executors - Jepsen-style Tests', skip: Gem.win_platform? do
           item * 2
         })
 
-        # Both executors use IPC for error communication, so both raise errors
-        expect do
-          executor.execute_stage(stage, {}, input_queue, output_queue, stage_stats)
-        end.to raise_error(/error/i)
+        if executor_type == :cow_fork
+          # COW fork: one item per fork, so error kills the fork and propagates
+          expect do
+            executor.execute_stage(stage, {}, input_queue, output_queue, stage_stats)
+          end.to raise_error(/error/i)
+        else
+          # IPC fork: ConsumerStage catches errors and continues, so no exception raised
+          # Errors are logged but processing continues
+          expect do
+            executor.execute_stage(stage, {}, input_queue, output_queue, stage_stats)
+          end.not_to raise_error
+
+          # Verify that non-error items were still processed
+          results = []
+          results << output_queue.pop until output_queue.empty?
+          expect(results.size).to eq(items.size - error_items.size)
+        end
       end
 
       it 'handles nil results correctly' do
@@ -397,9 +421,12 @@ RSpec.describe 'Fork Executors - Jepsen-style Tests', skip: Gem.win_platform? do
 
         user_context = { multiplier: 3, offset: 10 }
 
-        stage = create_stage(processor: lambda { |item, ctx|
-          item * ctx[:multiplier] + ctx[:offset]
-        })
+        stage = create_stage(
+          processor: lambda { |item, ctx|
+            item * ctx[:multiplier] + ctx[:offset]
+          },
+          expects_context: true
+        )
 
         executor.execute_stage(stage, user_context, input_queue, output_queue, stage_stats)
 
@@ -423,12 +450,15 @@ RSpec.describe 'Fork Executors - Jepsen-style Tests', skip: Gem.win_platform? do
         # Shared mutable state
         user_context = { counter: 0, data: [] }
 
-        stage = create_stage(processor: lambda { |item, ctx|
-          # Mutate context (should be copy-on-write)
-          ctx[:counter] += 1
-          ctx[:data] << item
-          item * 2
-        })
+        stage = create_stage(
+          processor: lambda { |item, ctx|
+            # Mutate context (should be copy-on-write)
+            ctx[:counter] += 1
+            ctx[:data] << item
+            item * 2
+          },
+          expects_context: true
+        )
 
         executor.execute_stage(stage, user_context, input_queue, output_queue, stage_stats)
 
