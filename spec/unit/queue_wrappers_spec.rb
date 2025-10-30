@@ -2,7 +2,6 @@
 
 require 'spec_helper'
 require 'minigun/queue_wrappers'
-require 'benchmark'
 
 RSpec.describe Minigun::OutputQueue do
   let(:stage_name) { :test_stage }

@@ -8,6 +8,7 @@ gemspec
 gem 'msgpack'
 
 # Test dependencies
+gem 'benchmark'
 gem 'rake'
 gem 'rspec'
 gem 'rubocop'

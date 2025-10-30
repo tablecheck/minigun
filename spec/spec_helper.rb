@@ -3,6 +3,7 @@
 require 'minigun'
 require 'rspec'
 require 'timeout'
+require 'benchmark'
 
 RSpec.configure do |config|
   config.expect_with :rspec do |expectations|
