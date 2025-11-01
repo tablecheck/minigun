@@ -18,7 +18,7 @@ module Minigun
       }
 
       # Root pipeline - all stages and nested pipelines live here
-      @root_pipeline = root_pipeline || Pipeline.new(:default, @config)
+      @root_pipeline = root_pipeline || Pipeline.new(nil, :default, @config)
     end
 
     # Set config value (applies to all pipelines)
@@ -61,7 +61,7 @@ module Minigun
       pipeline_stage = PipelineStage.new(@root_pipeline, name, nil, options)
 
       # Create the actual Pipeline instance for this nested pipeline
-      nested_pipeline = Pipeline.new(name, @config)
+      nested_pipeline = Pipeline.new(@root_pipeline, name, @config)
       pipeline_stage.pipeline = nested_pipeline
 
       # Add stages to the nested pipeline via block
@@ -108,7 +108,7 @@ module Minigun
       else
         # Create new PipelineStage and add to root_pipeline (pipeline-first positional style)
         pipeline_stage = PipelineStage.new(@root_pipeline, name, nil, options)
-        pipeline = Pipeline.new(name, @config)
+        pipeline = Pipeline.new(@root_pipeline, name, @config)
         pipeline_stage.pipeline = pipeline
 
         @root_pipeline.stages << pipeline_stage

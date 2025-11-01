@@ -37,9 +37,10 @@ module Minigun
   # A Pipeline can be standalone or part of a multi-pipeline Task
   class Pipeline
     attr_reader :name, :config, :stages, :hooks, :dag, :output_queues, :stage_order, :stats,
-                :context, :stage_hooks, :stage_input_queues, :runtime_edges, :input_queues
+                :context, :stage_hooks, :stage_input_queues, :runtime_edges, :input_queues, :parent_pipeline
 
-    def initialize(name, config = {}, stages: nil, hooks: nil, stage_hooks: nil, dag: nil, stage_order: nil, stats: nil)
+    def initialize(parent_pipeline, name, config = {}, stages: nil, hooks: nil, stage_hooks: nil, dag: nil, stage_order: nil, stats: nil)
+      @parent_pipeline = parent_pipeline
       @name = name
       @config = {
         max_threads: config[:max_threads] || 5,
@@ -74,6 +75,12 @@ module Minigun
       @stats = stats # Will be initialized in run() if nil
     end
 
+    # Get the root pipeline (top-level pipeline in the hierarchy)
+    # Walks up the parent chain until it finds a pipeline with no parent
+    def root_pipeline
+      @root_pipeline ||= @parent_pipeline&.root_pipeline || self
+    end
+
     # Find a stage by name or object reference
     def find_stage(name_or_obj)
       return name_or_obj if name_or_obj.is_a?(Stage)
@@ -86,6 +93,7 @@ module Minigun
       @stages.each { |stage| duped_stages << stage.dup }
 
       Pipeline.new(
+        @parent_pipeline,
         @name,
         @config.dup,
         stages: duped_stages, # REMOVE_THIS - change to just @stages.map(&:dup) Deep copy - dup each stage object

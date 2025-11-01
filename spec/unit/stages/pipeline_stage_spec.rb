@@ -4,7 +4,8 @@ require 'spec_helper'
 
 RSpec.describe Minigun::PipelineStage do
   let(:config) { { max_threads: 2, max_processes: 1 } }
-  let(:mock_pipeline) { instance_double(Minigun::Pipeline, name: 'test_pipeline') }
+  let(:mock_context) { Object.new }
+  let(:mock_pipeline) { instance_double(Minigun::Pipeline, name: 'test_pipeline', context: mock_context) }
 
   describe '#initialize' do
     it 'creates a PipelineStage without a pipeline initially' do
@@ -24,7 +25,7 @@ RSpec.describe Minigun::PipelineStage do
   describe '#pipeline=' do
     it 'sets the pipeline' do
       stage = described_class.new(mock_pipeline, :my_pipeline, nil, {})
-      pipeline = Minigun::Pipeline.new(:test, config)
+      pipeline = Minigun::Pipeline.new(nil, :test, config)
 
       stage.pipeline = pipeline
 
@@ -33,7 +34,7 @@ RSpec.describe Minigun::PipelineStage do
 
     it 'allows setting pipeline to nil' do
       stage = described_class.new(mock_pipeline, :my_pipeline, nil, {})
-      pipeline = Minigun::Pipeline.new(:test, config)
+      pipeline = Minigun::Pipeline.new(nil, :test, config)
       stage.pipeline = pipeline
 
       stage.pipeline = nil
@@ -62,11 +63,13 @@ RSpec.describe Minigun::PipelineStage do
     it 'runs the nested pipeline when pipeline is set' do
       stage = described_class.new(mock_pipeline, :my_pipeline, nil, {})
       context = Object.new
+      root_pipeline_mock = instance_double(Minigun::Pipeline, context: context)
       pipeline = instance_double(Minigun::Pipeline, context: context)
       stage.pipeline = pipeline
 
       stage_ctx = instance_double(Minigun::StageContext,
                                   pipeline: pipeline,
+                                  root_pipeline: root_pipeline_mock,
                                   stage: stage,
                                   sources_expected: Set.new,
                                   input_queue: Queue.new,
@@ -95,6 +98,7 @@ RSpec.describe Minigun::PipelineStage do
       sources = Set.new([:upstream])
       stage_ctx = instance_double(Minigun::StageContext,
                                   pipeline: pipeline,
+                                  root_pipeline: mock_pipeline,
                                   stage: stage,
                                   sources_expected: sources,
                                   input_queue: input_queue,
@@ -126,6 +130,7 @@ RSpec.describe Minigun::PipelineStage do
       output_queue = Queue.new
       stage_ctx = instance_double(Minigun::StageContext,
                                   pipeline: pipeline,
+                                  root_pipeline: mock_pipeline,
                                   stage: stage,
                                   sources_expected: Set.new,
                                   input_queue: Queue.new,
@@ -152,6 +157,7 @@ RSpec.describe Minigun::PipelineStage do
 
       stage_ctx = instance_double(Minigun::StageContext,
                                   pipeline: pipeline,
+                                  root_pipeline: mock_pipeline,
                                   stage: stage,
                                   sources_expected: Set.new,
                                   input_queue: Queue.new,
@@ -178,6 +184,7 @@ RSpec.describe Minigun::PipelineStage do
 
       stage_ctx = instance_double(Minigun::StageContext,
                                   pipeline: pipeline,
+                                  root_pipeline: mock_pipeline,
                                   stage: stage,
                                   sources_expected: Set.new,
                                   input_queue: Queue.new,
