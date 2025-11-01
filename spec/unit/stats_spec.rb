@@ -3,14 +3,16 @@
 require 'spec_helper'
 
 RSpec.describe Minigun::Stats do
+  let(:test_stage) { double('Stage', name: :test_stage) }
+
   describe '#initialize' do
-    it 'creates stats with stage name' do
-      stats = described_class.new(:test_stage)
+    it 'creates stats with stage object' do
+      stats = described_class.new(test_stage)
       expect(stats.stage_name).to eq(:test_stage)
     end
 
     it 'defaults is_terminal to false' do
-      stats = described_class.new(:test_stage)
+      stats = described_class.new(test_stage)
       expect(stats.total_items).to eq(0)
     end
 
@@ -23,13 +25,13 @@ RSpec.describe Minigun::Stats do
 
   describe '#start! and #finish!' do
     it 'records start time' do
-      stats = described_class.new(:test_stage)
+      stats = described_class.new(test_stage)
       stats.start!
       expect(stats.start_time).to be_a(Time)
     end
 
     it 'records end time' do
-      stats = described_class.new(:test_stage)
+      stats = described_class.new(test_stage)
       stats.start!
       stats.finish!
       expect(stats.end_time).to be_a(Time)
@@ -38,19 +40,19 @@ RSpec.describe Minigun::Stats do
 
   describe '#increment_produced' do
     it 'increments produced count' do
-      stats = described_class.new(:test_stage)
+      stats = described_class.new(test_stage)
       stats.increment_produced
       expect(stats.items_produced).to eq(1)
     end
 
     it 'increments by custom amount' do
-      stats = described_class.new(:test_stage)
+      stats = described_class.new(test_stage)
       stats.increment_produced(5)
       expect(stats.items_produced).to eq(5)
     end
 
     it 'is thread-safe' do
-      stats = described_class.new(:test_stage)
+      stats = described_class.new(test_stage)
       threads = Array.new(10) do
         Thread.new { 100.times { stats.increment_produced } }
       end
@@ -61,19 +63,19 @@ RSpec.describe Minigun::Stats do
 
   describe '#increment_consumed' do
     it 'increments consumed count' do
-      stats = described_class.new(:test_stage)
+      stats = described_class.new(test_stage)
       stats.increment_consumed
       expect(stats.items_consumed).to eq(1)
     end
 
     it 'increments by custom amount' do
-      stats = described_class.new(:test_stage)
+      stats = described_class.new(test_stage)
       stats.increment_consumed(3)
       expect(stats.items_consumed).to eq(3)
     end
 
     it 'is thread-safe' do
-      stats = described_class.new(:test_stage)
+      stats = described_class.new(test_stage)
       threads = Array.new(10) do
         Thread.new { 100.times { stats.increment_consumed } }
       end
@@ -84,13 +86,13 @@ RSpec.describe Minigun::Stats do
 
   describe '#increment_failed' do
     it 'increments failed count' do
-      stats = described_class.new(:test_stage)
+      stats = described_class.new(test_stage)
       stats.increment_failed
       expect(stats.items_failed).to eq(1)
     end
 
     it 'is thread-safe' do
-      stats = described_class.new(:test_stage)
+      stats = described_class.new(test_stage)
       threads = Array.new(10) do
         Thread.new { 50.times { stats.increment_failed } }
       end
@@ -101,12 +103,12 @@ RSpec.describe Minigun::Stats do
 
   describe '#runtime' do
     it 'returns 0 when not started' do
-      stats = described_class.new(:test_stage)
+      stats = described_class.new(test_stage)
       expect(stats.runtime).to eq(0)
     end
 
     it 'calculates runtime when finished' do
-      stats = described_class.new(:test_stage)
+      stats = described_class.new(test_stage)
       stats.start!
       sleep(0.01)
       stats.finish!
@@ -114,7 +116,7 @@ RSpec.describe Minigun::Stats do
     end
 
     it 'calculates runtime from start to now when not finished' do
-      stats = described_class.new(:test_stage)
+      stats = described_class.new(test_stage)
       stats.start!
       sleep(0.01)
       expect(stats.runtime).to be > 0
@@ -143,12 +145,12 @@ RSpec.describe Minigun::Stats do
 
   describe '#throughput' do
     it 'returns 0 when runtime is 0' do
-      stats = described_class.new(:test_stage)
+      stats = described_class.new(test_stage)
       expect(stats.throughput).to eq(0)
     end
 
     it 'calculates items per second' do
-      stats = described_class.new(:test_stage)
+      stats = described_class.new(test_stage)
       stats.start!
       stats.increment_produced(100)
       sleep(0.1)
@@ -160,14 +162,14 @@ RSpec.describe Minigun::Stats do
 
   describe '#time_per_item' do
     it 'returns 0 when no items' do
-      stats = described_class.new(:test_stage)
+      stats = described_class.new(test_stage)
       stats.start!
       stats.finish!
       expect(stats.time_per_item).to eq(0)
     end
 
     it 'calculates average time per item' do
-      stats = described_class.new(:test_stage)
+      stats = described_class.new(test_stage)
       stats.start!
       stats.increment_produced(10)
       sleep(0.1)
@@ -179,18 +181,18 @@ RSpec.describe Minigun::Stats do
 
   describe '#success_rate' do
     it 'returns 100% when no items' do
-      stats = described_class.new(:test_stage)
+      stats = described_class.new(test_stage)
       expect(stats.success_rate).to eq(100.0)
     end
 
     it 'returns 100% when no failures' do
-      stats = described_class.new(:test_stage)
+      stats = described_class.new(test_stage)
       stats.increment_produced(10)
       expect(stats.success_rate).to eq(100.0)
     end
 
     it 'calculates success rate with failures' do
-      stats = described_class.new(:test_stage)
+      stats = described_class.new(test_stage)
       stats.increment_produced(10)
       stats.increment_failed(2)
       expect(stats.success_rate).to eq(80.0)
@@ -199,7 +201,7 @@ RSpec.describe Minigun::Stats do
 
   describe '#record_latency' do
     it 'uses reservoir sampling for uniform probability' do
-      stats = described_class.new(:test_stage)
+      stats = described_class.new(test_stage)
 
       # Record many latencies
       200.times do |i|
@@ -219,7 +221,7 @@ RSpec.describe Minigun::Stats do
     end
 
     it 'maintains reservoir size limit' do
-      stats = described_class.new(:test_stage)
+      stats = described_class.new(test_stage)
 
       # Record more items than reservoir size
       2000.times do |i|
@@ -237,7 +239,7 @@ RSpec.describe Minigun::Stats do
     end
 
     it 'maintains uniform probability distribution' do
-      stats = described_class.new(:test_stage)
+      stats = described_class.new(test_stage)
 
       # Record many items with distinct values
       5000.times do |i|
@@ -269,7 +271,7 @@ RSpec.describe Minigun::Stats do
     end
 
     it 'is thread-safe with concurrent latency recording' do
-      stats = described_class.new(:test_stage)
+      stats = described_class.new(test_stage)
 
       threads = Array.new(10) do
         Thread.new do
@@ -289,7 +291,7 @@ RSpec.describe Minigun::Stats do
     end
 
     it 'tracks total observation count separately from samples' do
-      stats = described_class.new(:test_stage)
+      stats = described_class.new(test_stage)
 
       # Record 10,000 latencies
       10_000.times do |i|
@@ -306,7 +308,7 @@ RSpec.describe Minigun::Stats do
     end
 
     it 'works correctly with very large datasets (1 million items)' do
-      stats = described_class.new(:test_stage)
+      stats = described_class.new(test_stage)
 
       # Simulate 1 million items (use modulo to keep distinct values manageable)
       1_000_000.times do |i|
@@ -330,7 +332,7 @@ RSpec.describe Minigun::Stats do
 
   describe 'percentile methods' do
     let(:stats) do
-      s = described_class.new(:test_stage)
+      s = described_class.new(test_stage)
       # Add samples using the public API
       s.start!
       [0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.10].each do |latency|
@@ -342,7 +344,7 @@ RSpec.describe Minigun::Stats do
 
     describe '#latency_data?' do
       it 'returns false when no samples' do
-        stats = described_class.new(:test_stage)
+        stats = described_class.new(test_stage)
         expect(stats.latency_data?).to be false
       end
 
@@ -378,7 +380,7 @@ RSpec.describe Minigun::Stats do
 
   describe '#to_h' do
     it 'returns hash with basic stats' do
-      stats = described_class.new(:test_stage)
+      stats = described_class.new(test_stage)
       stats.start!
       stats.increment_produced(10)
       stats.increment_consumed(5)
@@ -395,7 +397,7 @@ RSpec.describe Minigun::Stats do
     end
 
     it 'includes latency data when available' do
-      stats = described_class.new(:test_stage)
+      stats = described_class.new(test_stage)
       stats.start!
       [0.01, 0.02, 0.03].each { |latency| stats.record_latency(latency) }
       stats.finish!
@@ -408,7 +410,7 @@ RSpec.describe Minigun::Stats do
     end
 
     it 'shows observations count separately from samples in to_h' do
-      stats = described_class.new(:test_stage)
+      stats = described_class.new(test_stage)
 
       # Record 5000 items
       5000.times do |i|
@@ -428,7 +430,7 @@ RSpec.describe Minigun::Stats do
 
   describe '#to_s' do
     it 'returns readable string representation' do
-      stats = described_class.new(:test_stage)
+      stats = described_class.new(test_stage)
       stats.start!
       stats.increment_produced(10)
       stats.finish!
@@ -441,7 +443,7 @@ RSpec.describe Minigun::Stats do
     end
 
     it 'includes failure info when present' do
-      stats = described_class.new(:test_stage)
+      stats = described_class.new(test_stage)
       stats.increment_produced(10)
       stats.increment_failed(2)
 
@@ -450,7 +452,7 @@ RSpec.describe Minigun::Stats do
     end
 
     it 'includes latency info when available' do
-      stats = described_class.new(:test_stage)
+      stats = described_class.new(test_stage)
       stats.start!
       [0.01, 0.02].each { |latency| stats.record_latency(latency) }
       stats.finish!

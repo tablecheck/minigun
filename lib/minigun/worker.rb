@@ -83,8 +83,8 @@ module Minigun
       # DAG now uses Stage objects instead of names
       sources_expected = if @stage.run_mode == :autonomous
                            Set.new
-                         elsif @stage.name == :_entrance && @pipeline.input_queues # REMOVE_THIS -- no logic based on stage name
-                           # For :_entrance, use sources from parent pipeline if available
+                         elsif @stage.is_a?(Minigun::EntranceStage) && @pipeline.input_queues
+                           # For EntranceStage, use sources from parent pipeline if available
                            @pipeline.input_queues[:sources_expected] || Set.new
                          else
                            Set.new(dag.upstream(@stage))
@@ -99,7 +99,6 @@ module Minigun
         worker: self,
         pipeline: @pipeline,
         stage: @stage,
-        stage_name: @stage_name,   # Keep for backward compat # REMOVE_THIS
         dag: dag,
         runtime_edges: @pipeline.runtime_edges,
         stage_input_queues: stage_input_queues,
