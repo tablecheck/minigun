@@ -129,9 +129,12 @@ RSpec.describe 'Multiple Producers' do
       pipeline = task.root_pipeline
       stats = pipeline.stats
 
-      # Should have stats for both producers
-      fast_stats = stats.stage_stats[:fast_producer]
-      slow_stats = stats.stage_stats[:slow_producer]
+      # Should have stats for both producers (look up by stage object)
+      fast_producer = pipeline.find_stage(:fast_producer)
+      slow_producer = pipeline.find_stage(:slow_producer)
+      
+      fast_stats = stats.stage_stats[fast_producer]
+      slow_stats = stats.stage_stats[slow_producer]
 
       expect(fast_stats).not_to be_nil
       expect(slow_stats).not_to be_nil
