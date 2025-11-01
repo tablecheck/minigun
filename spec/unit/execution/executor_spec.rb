@@ -3,6 +3,8 @@
 require 'spec_helper'
 
 RSpec.describe Minigun::Execution::Executor do
+  let(:mock_pipeline) { instance_double(Minigun::Pipeline, name: 'test_pipeline') }
+  
   # Helper to create a mock stage_ctx
   let(:mock_stage_ctx) do
     dag = double('dag', terminal?: false)
@@ -416,8 +418,10 @@ RSpec.describe Minigun::Execution::CowForkPoolExecutor, skip: Gem.win_platform? 
     it 'executes stage with inherited memory (COW)' do
       # Use real ConsumerStage - RSpec mocks don't work across forks
       stage = Minigun::ConsumerStage.new(
-        name: :test,
-        block: proc { |item, output| output << (item * 2) }
+        mock_pipeline,
+        :test,
+        proc { |item, output| output << (item * 2) },
+        {}
       )
 
       input_queue = Queue.new
@@ -434,8 +438,10 @@ RSpec.describe Minigun::Execution::CowForkPoolExecutor, skip: Gem.win_platform? 
     it 'propagates errors from child process' do
       # Use real ConsumerStage that raises an error
       stage = Minigun::ConsumerStage.new(
-        name: :test,
-        block: proc { |_item, _output| raise 'boom' }
+        mock_pipeline,
+        :test,
+        proc { |_item, _output| raise 'boom' },
+        {}
       )
 
       input_queue = Queue.new
@@ -454,12 +460,14 @@ RSpec.describe Minigun::Execution::CowForkPoolExecutor, skip: Gem.win_platform? 
 
       # Real stage that tracks which items it processes
       stage = Minigun::ConsumerStage.new(
-        name: :test,
-        block: proc { |item, output|
+        mock_pipeline,
+        :test,
+        proc { |item, output|
           processed_items << item
           sleep 0.01  # Slow processing
           output << item
-        }
+        },
+        {}
       )
 
       input_queue = Queue.new
@@ -507,8 +515,10 @@ RSpec.describe Minigun::Execution::IpcForkPoolExecutor, skip: Gem.win_platform? 
     it 'communicates success via IPC pipe' do
       # Use real ConsumerStage - RSpec mocks don't work across forks
       stage = Minigun::ConsumerStage.new(
-        name: :test,
-        block: proc { |item, output| output << (item * 2) }
+        mock_pipeline,
+        :test,
+        proc { |item, output| output << (item * 2) },
+        {}
       )
 
       input_queue = Queue.new
@@ -532,11 +542,13 @@ RSpec.describe Minigun::Execution::IpcForkPoolExecutor, skip: Gem.win_platform? 
     it 'respects max_size concurrency limit' do
       # Real stage that processes items
       stage = Minigun::ConsumerStage.new(
-        name: :test,
-        block: proc { |item, output|
+        mock_pipeline,
+        :test,
+        proc { |item, output|
           sleep 0.01  # Slow processing
           output << item
-        }
+        },
+        {}
       )
 
       input_queue = Queue.new
@@ -557,8 +569,10 @@ RSpec.describe Minigun::Execution::IpcForkPoolExecutor, skip: Gem.win_platform? 
     it 'workers process multiple items from streaming queue' do
       # Test that IPC workers are persistent and process multiple items
       stage = Minigun::ConsumerStage.new(
-        name: :test,
-        block: proc { |item, output| output << item }
+        mock_pipeline,
+        :test,
+        proc { |item, output| output << item },
+        {}
       )
 
       input_queue = Queue.new

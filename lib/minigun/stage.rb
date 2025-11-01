@@ -36,23 +36,12 @@ module Minigun
   class Stage
     attr_reader :name, :options, :block, :pipeline
 
-    def initialize(*args, name: nil, block: nil, options: {}, **kwargs)
-      # Support both old (keyword) and new (positional) signatures
-      # New: Stage.new(pipeline, name, block, options)
-      # Old: Stage.new(name: :foo, block: proc {}, options: {})
-      if args.length > 0 && args[0].is_a?(Pipeline)
-        # New positional style: (pipeline, name, block, options)
-        @pipeline = args[0]
-        @name = args[1]
-        @block = args[2]
-        @options = args[3] || {}
-      else # REMOVE_THIS
-        # Old keyword style (backward compatible)
-        @pipeline = nil
-        @name = name
-        @block = block
-        @options = options
-      end
+    # Positional constructor: Stage.new(pipeline, name, block, options)
+    def initialize(pipeline, name, block, options = {})
+      @pipeline = pipeline
+      @name = name
+      @block = block
+      @options = options
 
       # Auto-generate name if not provided (for unnamed stages)
       # Use "_" prefix + 8 char random hex
@@ -292,20 +281,12 @@ module Minigun
   class AccumulatorStage < ConsumerStage
     attr_reader :max_size, :max_wait
 
-    def initialize(*args, name: nil, block: nil, options: {}, **kwargs)
-      # Support both old and new signatures
-      if args.length > 0 && args[0].is_a?(Pipeline)
-        # New style: AccumulatorStage.new(pipeline, name, block, options)
-        super(args[0], args[1], args[2], args[3] || {})
-        opts = args[3] || {}
-      else # REMOVE_THIS
-        # Old style: AccumulatorStage.new(name: :foo, block: proc {}, options: {})
-        super(name: name, block: block, options: options)
-        opts = options
-      end
-
-      @max_size = opts[:max_size] || 100
-      @max_wait = opts[:max_wait] || nil # Future: time-based batching
+    # Positional constructor: AccumulatorStage.new(pipeline, name, block, options)
+    def initialize(pipeline, name, block, options = {})
+      super(pipeline, name, block, options)
+      
+      @max_size = options[:max_size] || 100
+      @max_wait = options[:max_wait] || nil # Future: time-based batching
       @buffer = []
       @mutex = Mutex.new
     end
@@ -379,17 +360,10 @@ module Minigun
   class RouterStage < Stage
     attr_accessor :targets
 
-    def initialize(*args, name: nil, targets: nil, **kwargs)
-      # Support both old and new signatures
-      if args.length > 0 && args[0].is_a?(Pipeline)
-        # New style: RouterStage.new(pipeline, name, targets, options)
-        super(args[0], args[1], nil, args[3] || {})
-        @targets = args[2] || []
-      else # REMOVE_THIS
-        # Old style: RouterStage.new(name: :foo, targets: [...])
-        super(name: name, options: {})
-        @targets = targets || []
-      end
+    # Positional constructor: RouterStage.new(pipeline, name, targets, options)
+    def initialize(pipeline, name, targets, options = {})
+      super(pipeline, name, nil, options)
+      @targets = targets || []
     end
 
     protected
@@ -455,16 +429,18 @@ module Minigun
   # Special entrance stage for nested pipelines
   # Automatically created when a pipeline has input from parent
   class EntranceStage < ConsumerStage
-    def initialize(name: :_entrance, block: nil, options: {})
-      super(name: name, block: block, options: options)
+    # Positional constructor: EntranceStage.new(pipeline, name, block, options)
+    def initialize(pipeline, name, block, options = {})
+      super(pipeline, name, block, options)
     end
   end
 
   # Special exit stage for nested pipelines
   # Automatically created when a pipeline has output to parent
   class ExitStage < ConsumerStage
-    def initialize(name: :_exit, block: nil, options: {})
-      super(name: name, block: block, options: options)
+    # Positional constructor: ExitStage.new(pipeline, name, block, options)
+    def initialize(pipeline, name, block, options = {})
+      super(pipeline, name, block, options)
     end
   end
 
@@ -472,15 +448,9 @@ module Minigun
   class PipelineStage < Stage
     attr_reader :nested_pipeline
 
-    def initialize(*args, name: nil, options: {}, **kwargs)
-      # Support both old and new signatures
-      if args.length > 0 && args[0].is_a?(Pipeline)
-        # New style: PipelineStage.new(pipeline, name, block, options)
-        super(args[0], args[1], nil, args[3] || options)
-      else # REMOVE_THIS
-        # Old style: PipelineStage.new(name: :foo, options: {})
-        super(name: name, options: options)
-      end
+    # Positional constructor: PipelineStage.new(pipeline, name, block, options)
+    def initialize(pipeline, name, block, options = {})
+      super(pipeline, name, block, options)
       @nested_pipeline = nil
     end
 

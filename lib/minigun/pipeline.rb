@@ -132,22 +132,22 @@ module Minigun
 
       # Create stage instance
       stage = if type.is_a?(Class)
-                # Custom stage class provided
-                type.new(name: name, options: options)
+                # Custom stage class provided (positional constructor style)
+                type.new(self, name, block, options)
               else
                 # Extract stage_type from options if present (used by DSL)
                 actual_type = options.delete(:stage_type) || type
 
-                # Create appropriate stage subclass based on type symbol
+                # Create appropriate stage subclass based on type symbol (pipeline-first positional style)
                 case actual_type
                 when :producer
-                  ProducerStage.new(name: name, block: block, options: options)
+                  ProducerStage.new(self, name, block, options)
                 when :processor, :consumer
-                  ConsumerStage.new(name: name, block: block, options: options)
+                  ConsumerStage.new(self, name, block, options)
                 when :stage
-                  Stage.new(name: name, block: block, options: options)
+                  Stage.new(self, name, block, options)
                 when :accumulator
-                  AccumulatorStage.new(name: name, block: block, options: options)
+                  AccumulatorStage.new(self, name, block, options)
                 else
                   raise Minigun::Error, "Unknown stage type: #{actual_type}"
                 end
@@ -361,12 +361,12 @@ module Minigun
         # Get explicit routing strategy from stage options, or default to :broadcast
         routing_strategy = stage.options[:routing] || :broadcast
 
-        # Create the appropriate router subclass
+        # Create the appropriate router subclass (pipeline-first positional style)
         router_name = :"#{stage.name}_router"
         router_stage = if routing_strategy == :round_robin
-                         RouterRoundRobinStage.new(name: router_name, targets: downstream.dup)
+                         RouterRoundRobinStage.new(self, router_name, downstream.dup, {})
                        else
-                         RouterBroadcastStage.new(name: router_name, targets: downstream.dup)
+                         RouterBroadcastStage.new(self, router_name, downstream.dup, {})
                        end
         stages_to_add << router_stage
 
@@ -544,7 +544,7 @@ module Minigun
         # Just forward items from parent to nested pipeline
         output << item
       end
-      entrance_stage = Minigun::EntranceStage.new(block: entrance_block)
+      entrance_stage = Minigun::EntranceStage.new(self, :_entrance, entrance_block, {})
 
       # Add the :_entrance stage to the pipeline
       @stages << entrance_stage
@@ -574,7 +574,7 @@ module Minigun
       exit_block = proc do |item, _stage_output|
         parent_output << item if parent_output
       end
-      exit_stage = Minigun::ExitStage.new(block: exit_block)
+      exit_stage = Minigun::ExitStage.new(self, :_exit, exit_block, {})
 
       # Add the :_exit stage to the pipeline
       @stages << exit_stage

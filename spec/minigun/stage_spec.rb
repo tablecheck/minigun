@@ -3,9 +3,11 @@
 require 'spec_helper'
 
 RSpec.describe Minigun::Stage do
+  let(:mock_pipeline) { instance_double(Minigun::Pipeline, name: 'test_pipeline') }
+  
   describe 'base class' do
     it 'returns nil when execute is called without a block' do
-      stage = described_class.new(name: :test)
+      stage = described_class.new(mock_pipeline, :test, nil, {})
       input_queue = double('input')
       output_queue = double('output')
       expect(stage.execute(Object.new, input_queue, output_queue, nil)).to be_nil
@@ -13,7 +15,7 @@ RSpec.describe Minigun::Stage do
 
     it 'executes the block when provided' do
       executed = false
-      stage = described_class.new(name: :test, block: proc { executed = true })
+      stage = described_class.new(mock_pipeline, :test, proc { executed = true }, {})
 
       # Create mock queues
       input_queue = double('input')
@@ -26,8 +28,10 @@ RSpec.describe Minigun::Stage do
 end
 
 RSpec.describe Minigun::ProducerStage do
+  let(:mock_pipeline) { instance_double(Minigun::Pipeline, name: 'test_pipeline') }
+  
   describe 'producer behavior' do
-    let(:stage) { described_class.new(name: :test, block: proc { |output| }) }
+    let(:stage) { described_class.new(mock_pipeline, :test, proc { |output| }, {}) }
 
     it 'is a ProducerStage' do
       expect(stage).to be_a(described_class)
@@ -36,8 +40,10 @@ RSpec.describe Minigun::ProducerStage do
     it 'executes without an item argument' do
       result = nil
       stage = described_class.new(
-        name: :test,
-        block: proc { |_output| result = 42 }
+        mock_pipeline,
+        :test,
+        proc { |_output| result = 42 },
+        {}
       )
 
       context = Object.new
@@ -49,8 +55,10 @@ RSpec.describe Minigun::ProducerStage do
 end
 
 RSpec.describe Minigun::ConsumerStage do
+  let(:mock_pipeline) { instance_double(Minigun::Pipeline, name: 'test_pipeline') }
+  
   describe 'processor behavior' do
-    let(:stage) { described_class.new(name: :test, block: proc { |_x, _output| }) }
+    let(:stage) { described_class.new(mock_pipeline, :test, proc { |_x, _output| }, {}) }
 
     it 'is a ConsumerStage' do
       expect(stage).to be_a(described_class)
@@ -58,11 +66,13 @@ RSpec.describe Minigun::ConsumerStage do
 
     it 'executes with queue-based output' do
       stage = described_class.new(
-        name: :test,
-        block: proc do |item, output|
+        mock_pipeline,
+        :test,
+        proc do |item, output|
           output << (item * 2)
           output << (item * 3)
-        end
+        end,
+        {}
       )
 
       context = Object.new
@@ -82,9 +92,10 @@ RSpec.describe Minigun::ConsumerStage do
   describe 'consumer behavior (has execution context)' do
     let(:stage) do
       described_class.new(
-        name: :test,
-        block: proc { |_x, _output| },
-        options: { _execution_context: { type: :cow_forks, mode: :per_batch, max: 2 } }
+        mock_pipeline,
+        :test,
+        proc { |_x, _output| },
+        { _execution_context: { type: :cow_forks, mode: :per_batch, max: 2 } }
       )
     end
 
@@ -99,14 +110,17 @@ RSpec.describe Minigun::ConsumerStage do
 end
 
 RSpec.describe Minigun::AccumulatorStage do
+  let(:mock_pipeline) { instance_double(Minigun::Pipeline, name: 'test_pipeline') }
+  
   it 'is a special batching stage' do
-    stage = described_class.new(name: :test, block: proc {})
+    stage = described_class.new(mock_pipeline, :test, proc {}, {})
     expect(stage.max_size).to eq(100) # default
   end
 end
 
 RSpec.describe 'Stage common behavior' do
-  let(:stage) { Minigun::ConsumerStage.new(name: :test, block: proc { |x, _output| x * 2 }, options: { foo: 'bar' }) }
+  let(:mock_pipeline) { instance_double(Minigun::Pipeline, name: 'test_pipeline') }
+  let(:stage) { Minigun::ConsumerStage.new(mock_pipeline, :test, proc { |x, _output| x * 2 }, { foo: 'bar' }) }
 
   describe '#initialize' do
     it 'creates a stage with required attributes' do
@@ -117,7 +131,7 @@ RSpec.describe 'Stage common behavior' do
     end
 
     it 'works without options' do
-      simple = Minigun::ConsumerStage.new(name: :simple, block: proc { |_x, _output| })
+      simple = Minigun::ConsumerStage.new(mock_pipeline, :simple, proc { |_x, _output| }, {})
       expect(simple.name).to eq(:simple)
       expect(simple.options).to eq({})
     end
@@ -127,8 +141,10 @@ RSpec.describe 'Stage common behavior' do
     it 'executes the block with given context and item' do
       result = nil
       stage = Minigun::ConsumerStage.new(
-        name: :test,
-        block: proc { |item, _output| result = item * 2 }
+        mock_pipeline,
+        :test,
+        proc { |item, _output| result = item * 2 },
+        {}
       )
 
       context = Object.new
@@ -153,8 +169,10 @@ RSpec.describe 'Stage common behavior' do
       context = context_class.new(100)
 
       stage = Minigun::ConsumerStage.new(
-        name: :test,
-        block: proc { |item, _output| @value + item }
+        mock_pipeline,
+        :test,
+        proc { |item, _output| @value + item },
+        {}
       )
 
       input_queue = double('input_queue')
@@ -172,9 +190,10 @@ RSpec.describe 'Stage common behavior' do
     it 'converts to hash representation' do
       block = proc { |_x, _output| }
       stage = Minigun::ConsumerStage.new(
-        name: :test,
-        block: block,
-        options: { opt: 'val' }
+        mock_pipeline,
+        :test,
+        block,
+        { opt: 'val' }
       )
 
       hash = stage.to_h
@@ -189,9 +208,10 @@ RSpec.describe 'Stage common behavior' do
     it 'provides hash-like access to attributes' do
       block = proc { |_x, _output| }
       stage = Minigun::ConsumerStage.new(
-        name: :test,
-        block: block,
-        options: { foo: 'bar' }
+        mock_pipeline,
+        :test,
+        block,
+        { foo: 'bar' }
       )
 
       expect(stage[:name]).to eq(:test)
@@ -200,7 +220,7 @@ RSpec.describe 'Stage common behavior' do
     end
 
     it 'returns nil for unknown keys' do
-      stage = Minigun::ConsumerStage.new(name: :test, block: proc { |_x, _output| })
+      stage = Minigun::ConsumerStage.new(mock_pipeline, :test, proc { |_x, _output| }, {})
       expect(stage[:unknown]).to be_nil
     end
   end

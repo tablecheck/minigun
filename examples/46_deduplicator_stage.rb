@@ -4,7 +4,7 @@ require_relative '../lib/minigun'
 
 # Custom stage that filters duplicate items based on accumulated state
 class DeduplicatorStage < Minigun::Stage
-  def initialize(name:, options: {})
+  def initialize(pipeline, name, block, options = {})
     super
     @seen = Set.new
     @mutex = Mutex.new
