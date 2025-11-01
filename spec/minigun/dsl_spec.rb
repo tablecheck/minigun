@@ -115,8 +115,8 @@ RSpec.describe Minigun::DSL do
         nil
       end
 
-      producer = instance._minigun_task.root_pipeline.stages[:grouped_producer]
-      consumer = instance._minigun_task.root_pipeline.stages[:grouped_consumer]
+      producer = instance._minigun_task.root_pipeline.find_stage(:grouped_producer)
+      consumer = instance._minigun_task.root_pipeline.find_stage(:grouped_consumer)
 
       expect(producer).not_to be_nil
       expect(producer.name).to eq(:grouped_producer)
@@ -202,14 +202,14 @@ RSpec.describe Minigun::DSL do
       expect(task.config[:max_processes]).to eq(2)
 
       # Check that stages were added by name
-      expect(pipeline.stages[:generate]).not_to be_nil
-      expect(pipeline.stages[:double]).not_to be_nil
-      expect(pipeline.stages[:collect]).not_to be_nil
+      expect(pipeline.find_stage(:generate)).not_to be_nil
+      expect(pipeline.find_stage(:double)).not_to be_nil
+      expect(pipeline.find_stage(:collect)).not_to be_nil
 
       # Verify stage properties based on their characteristics
-      gen_stage = pipeline.stages[:generate]
-      double_stage = pipeline.stages[:double]
-      collect_stage = pipeline.stages[:collect]
+      gen_stage = pipeline.find_stage(:generate)
+      double_stage = pipeline.find_stage(:double)
+      collect_stage = pipeline.find_stage(:collect)
 
       expect(gen_stage).to be_a(Minigun::ProducerStage)
       expect(double_stage).to be_a(Minigun::ConsumerStage)

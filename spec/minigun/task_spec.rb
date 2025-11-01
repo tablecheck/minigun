@@ -15,7 +15,7 @@ RSpec.describe Minigun::Task do
     end
 
     it 'initializes empty stages' do
-      expect(task.stages).to be_a(Minigun::StagesCollection)
+      expect(task.stages).to be_a(Array)
       expect(task.stages).to be_empty
     end
 
@@ -39,10 +39,11 @@ RSpec.describe Minigun::Task do
       block = proc { 'producer' }
       task.add_stage(:producer, :test_producer, &block)
 
-      expect(task.stages[:test_producer]).not_to be_nil
-      expect(task.stages[:test_producer].name).to eq(:test_producer)
-      expect(task.stages[:test_producer].block).to eq(block)
-      expect(task.stages[:test_producer]).to be_a(Minigun::ProducerStage)
+      stage = task.root_pipeline.find_stage(:test_producer)
+      expect(stage).not_to be_nil
+      expect(stage.name).to eq(:test_producer)
+      expect(stage.block).to eq(block)
+      expect(stage).to be_a(Minigun::ProducerStage)
     end
 
     it 'adds processor stages' do
@@ -53,27 +54,31 @@ RSpec.describe Minigun::Task do
       task.add_stage(:processor, :proc2, &block2)
 
       # Verify both were added
-      expect(task.stages[:proc1]).not_to be_nil
-      expect(task.stages[:proc2]).not_to be_nil
-      expect(task.stages[:proc1].name).to eq(:proc1)
-      expect(task.stages[:proc2].name).to eq(:proc2)
+      stage1 = task.root_pipeline.find_stage(:proc1)
+      stage2 = task.root_pipeline.find_stage(:proc2)
+      expect(stage1).not_to be_nil
+      expect(stage2).not_to be_nil
+      expect(stage1.name).to eq(:proc1)
+      expect(stage2.name).to eq(:proc2)
     end
 
     it 'adds accumulator stage' do
       block = proc { 'accumulator' }
       task.add_stage(:accumulator, :test_acc, &block)
 
-      expect(task.stages[:test_acc]).not_to be_nil
-      expect(task.stages[:test_acc].name).to eq(:test_acc)
-      expect(task.stages[:test_acc]).to be_a(Minigun::AccumulatorStage)
+      stage = task.root_pipeline.find_stage(:test_acc)
+      expect(stage).not_to be_nil
+      expect(stage.name).to eq(:test_acc)
+      expect(stage).to be_a(Minigun::AccumulatorStage)
     end
 
     it 'adds consumer stage' do
       block = proc { |x| x }
       task.add_stage(:consumer, :test_consumer, &block)
 
-      expect(task.stages[:test_consumer]).not_to be_nil
-      expect(task.stages[:test_consumer].name).to eq(:test_consumer)
+      stage = task.root_pipeline.find_stage(:test_consumer)
+      expect(stage).not_to be_nil
+      expect(stage.name).to eq(:test_consumer)
     end
   end
 

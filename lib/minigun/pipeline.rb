@@ -1,46 +1,15 @@
 # frozen_string_literal: true
 
 module Minigun
-  # Wrapper for stages array that provides both array and hash-like access
-  # This maintains backward compatibility with tests that use stages[:name]
-  # REMOVE_THIS - convert back to registry
-  class StagesCollection < Array
-    def [](key)
-      if key.is_a?(Integer)
-        # Array access: stages[0]
-        super
-      else
-        # Hash access: stages[:name] - find by name
-        find { |stage| stage.name == key }
-      end
-    end
-
-    def []=(key, value)
-      if key.is_a?(Integer)
-        # Array assignment: stages[0] = stage
-        super
-      else
-        # Hash assignment: stages[:name] = stage
-        # Remove any existing stage with this name first
-        delete_if { |stage| stage.name == key }
-        # Add the new stage
-        self << value
-      end
-    end
-
-    def key?(name)
-      any? { |stage| stage.name == name }
-    end
-  end
-
   # Pipeline represents a single data processing pipeline with stages
   # A Pipeline can be standalone or part of a multi-pipeline Task
   class Pipeline
-    attr_reader :name, :config, :stages, :hooks, :dag, :output_queues, :stage_order, :stats,
-                :context, :stage_hooks, :stage_input_queues, :runtime_edges, :input_queues, :parent_pipeline
+    attr_reader :name, :config, :stages, :hooks, :dag, :output_queues, :stats,
+                :context, :stage_hooks, :stage_input_queues, :runtime_edges, :input_queues, :parent_pipeline, :task
 
-    def initialize(name, parent_pipeline, config = {}, stages: nil, hooks: nil, stage_hooks: nil, dag: nil, stage_order: nil, stats: nil)
+    def initialize(name, task, parent_pipeline, config = {}, stages: nil, hooks: nil, stage_hooks: nil, dag: nil, stats: nil)
       @name = name
+      @task = task
       @parent_pipeline = parent_pipeline
       @config = {
         max_threads: config[:max_threads] || 5,
@@ -49,7 +18,7 @@ module Minigun
         use_ipc: config[:use_ipc] || false
       }
 
-      @stages = stages || StagesCollection.new # REMOVE_THIS - implement NameRegistry Array of Stage objects with hash-like access
+      @stages = stages || []
       @deferred_edges = [] # Store edges with forward references: [{from: stage, to: :name}, ...]
 
       # Pipeline-level hooks (run once per pipeline)
@@ -69,7 +38,6 @@ module Minigun
       }
 
       @dag = dag || DAG.new
-      @stage_order = stage_order || []
 
       # Statistics tracking
       @stats = stats # Will be initialized in run() if nil
@@ -89,14 +57,12 @@ module Minigun
 
     # Duplicate this pipeline for inheritance
     def dup
-      duped_stages = StagesCollection.new # REMOVE_THIS
-      @stages.each { |stage| duped_stages << stage.dup }
-
       Pipeline.new(
         @name,
+        @task,
         @parent_pipeline,
         @config.dup,
-        stages: duped_stages, # REMOVE_THIS - change to just @stages.map(&:dup) Deep copy - dup each stage object
+        stages: @stages.dup,
         hooks: {
           before_run: @hooks[:before_run].dup,
           after_run: @hooks[:after_run].dup,
@@ -109,8 +75,7 @@ module Minigun
           before_fork: @stage_hooks[:before_fork].transform_values(&:dup),
           after_fork: @stage_hooks[:after_fork].transform_values(&:dup)
         },
-        dag: @dag.dup,
-        stage_order: @stage_order.dup
+        dag: @dag.dup
       )
     end
 
@@ -167,8 +132,10 @@ module Minigun
       # Store stage in array
       @stages << stage
 
-      # Add to stage order and DAG (using object reference)
-      @stage_order << stage
+      # Register stage with the task's registry (if available)
+      @task&.registry&.register(stage, pipeline_name: @name)
+
+      # Add to DAG (using object reference)
       @dag.add_node(stage)
 
       # Add routing edges - resolve names to Stage objects immediately
@@ -396,10 +363,9 @@ module Minigun
         update[:add_router_edges].each { |(from, to)| @dag.add_edge(from, to) }
       end
 
-      # Add router stages to @stages array and stage_order
+      # Add router stages to @stages array
       stages_to_add.each do |stage|
         @stages << stage
-        @stage_order << stage  # Add to stage_order for proper tracking
       end
     end
 
@@ -474,8 +440,8 @@ module Minigun
     end
 
     def handle_multiple_producers_routing!
-      # After normalization, @stage_order contains Stage objects
-      producers = @stage_order.select { |stage| stage.run_mode == :autonomous }
+      # @stages contains Stage objects in definition order
+      producers = @stages.select { |stage| stage.run_mode == :autonomous }
 
       # Each producer without explicit routing should connect to its next stage in definition order
       producers.each do |producer|
@@ -483,25 +449,25 @@ module Minigun
         next unless @dag.downstream(producer).empty?
 
         # Find the next non-autonomous stage after this producer
-        producer_index = @stage_order.index(producer)
-        next_stage = @stage_order[(producer_index + 1)..].find { |stage| stage.run_mode != :autonomous }
+        producer_index = @stages.index(producer)
+        next_stage = @stages[(producer_index + 1)..].find { |stage| stage.run_mode != :autonomous }
 
         @dag.add_edge(producer, next_stage) if next_stage
       end
     end
 
     def fill_sequential_gaps_by_definition_order!
-      # After normalization, @stage_order contains Stage objects
-      @stage_order.each_with_index do |stage, index|
+      # @stages contains Stage objects in definition order
+      @stages.each_with_index do |stage, index|
         # Skip if already has downstream edges
         next if @dag.downstream(stage).any?
         # Skip if this is the last stage
-        next if index >= @stage_order.size - 1
+        next if index >= @stages.size - 1
 
         # Find the next non-producer stage
         next_stage = nil
-        ((index + 1)...@stage_order.size).each do |next_index|
-          candidate = @stage_order[next_index]
+        ((index + 1)...@stages.size).each do |next_index|
+          candidate = @stages[next_index]
 
           # Skip autonomous stages
           next if candidate.run_mode == :autonomous
@@ -554,9 +520,8 @@ module Minigun
       end
       entrance_stage = Minigun::EntranceStage.new(nil, self, entrance_block, {})
 
-      # Add the :_entrance stage to the pipeline
-      @stages << entrance_stage
-      @stage_order.unshift(entrance_stage) # Add stage object
+      # Add the :_entrance stage to the pipeline (at the beginning)
+      @stages.unshift(entrance_stage)
       @dag.add_node(entrance_stage)
 
       # Connect :_entrance to entry stages (all objects)
@@ -586,7 +551,6 @@ module Minigun
 
       # Add the :_exit stage to the pipeline
       @stages << exit_stage
-      @stage_order << exit_stage  # Add stage object
       @dag.add_node(exit_stage)
 
       # Connect terminal stages to :_exit (all objects)

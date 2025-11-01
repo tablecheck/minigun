@@ -160,7 +160,7 @@ RSpec.describe 'Yield Syntax Support' do
       instance.run
 
       # Get the actual stage instance from the pipeline
-      actual_stage = instance._minigun_task.root_pipeline.stages[:terminal]
+      actual_stage = instance._minigun_task.root_pipeline.find_stage(:terminal)
       expect(actual_stage.items_received.sort).to eq([0, 1, 2])
     end
   end

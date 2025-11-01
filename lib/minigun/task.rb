@@ -1,10 +1,56 @@
 # frozen_string_literal: true
 
 module Minigun
+  # NameRegistry manages stage registration and name->stage mapping
+  # Provides a centralized registry for all stages across all pipelines in a task
+  class NameRegistry
+    def initialize
+      @stages_by_name = {}  # { pipeline_name => { stage_name => stage_object } }
+      @all_stages = []      # All stage objects for iteration
+      @mutex = Mutex.new
+    end
+
+    # Register a stage with the registry
+    # @param stage [Stage] The stage object to register
+    # @param pipeline_name [Symbol] The name of the pipeline this stage belongs to
+    def register(stage, pipeline_name:)
+      @mutex.synchronize do
+        @all_stages << stage
+
+        # If stage has a name, register it in the name index
+        if stage.name
+          @stages_by_name[pipeline_name] ||= {}
+          @stages_by_name[pipeline_name][stage.name] = stage
+        end
+      end
+    end
+
+    # Find a stage by name within a specific pipeline
+    # @param name [Symbol] The stage name
+    # @param pipeline_name [Symbol] The pipeline name
+    # @return [Stage, nil] The stage object, or nil if not found
+    def find_by_name(name, pipeline_name)
+      @stages_by_name.dig(pipeline_name, name)
+    end
+
+    # Get all stages
+    def all_stages
+      @all_stages
+    end
+
+    # Clear the registry (useful for testing)
+    def clear
+      @mutex.synchronize do
+        @stages_by_name.clear
+        @all_stages.clear
+      end
+    end
+  end
+
   # Task orchestrates one or more pipelines
   # Supports both single-pipeline (implicit) and multi-pipeline modes
   class Task
-    attr_reader :config, :root_pipeline
+    attr_reader :config, :root_pipeline, :registry
 
     def initialize(config: nil, root_pipeline: nil)
       @config = config || {
@@ -17,8 +63,11 @@ module Minigun
         use_ipc: false
       }
 
+      # Initialize the registry for stage management
+      @registry = NameRegistry.new
+
       # Root pipeline - all stages and nested pipelines live here
-      @root_pipeline = root_pipeline || Pipeline.new(:default, nil, @config)
+      @root_pipeline = root_pipeline || Pipeline.new(:default, self, nil, @config)
     end
 
     # Set config value (applies to all pipelines)
@@ -71,7 +120,6 @@ module Minigun
 
       # Add the pipeline stage to the implicit pipeline
       @root_pipeline.stages << pipeline_stage
-      @root_pipeline.stage_order << pipeline_stage  # Use object for stage_order
       @root_pipeline.dag.add_node(pipeline_stage)
 
       # Extract routing if specified - resolve or defer edges
@@ -110,7 +158,6 @@ module Minigun
         pipeline_stage = PipelineStage.new(name, @root_pipeline, pipeline, nil, options)
 
         @root_pipeline.stages << pipeline_stage
-        @root_pipeline.stage_order << pipeline_stage  # Use object for stage_order
         @root_pipeline.dag.add_node(pipeline_stage)
       end
 

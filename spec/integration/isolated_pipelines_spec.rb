@@ -135,13 +135,13 @@ RSpec.describe 'Isolated Pipelines' do
 
       # Get the PipelineStage object from instance task
       task = instance._minigun_task
-      pipeline_stage = task.root_pipeline.stages[:standalone]
+      pipeline_stage = task.root_pipeline.find_stage(:standalone)
 
       # Verify it's a PipelineStage (nested pipeline)
       expect(pipeline_stage).to be_a(Minigun::PipelineStage)
 
       # The inner pipeline should not have :_input since no upstream connection
-      inner_pipeline = pipeline_stage.pipeline
+      inner_pipeline = pipeline_stage.nested_pipeline
       expect(inner_pipeline.dag.nodes).not_to include(:_input)
     end
   end

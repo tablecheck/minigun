@@ -59,7 +59,7 @@ RSpec.describe 'Class Inheritance with Minigun DSL' do
       expect(child_class._minigun_task.root_pipeline).not_to be(parent_class._minigun_task.root_pipeline)
 
       # But they should have the same stages
-      expect(child_class._minigun_task.root_pipeline.stages[:producer]&.name).to eq(parent_class._minigun_task.root_pipeline.stages[:producer]&.name)
+      expect(child_class._minigun_task.root_pipeline.find_stage(:producer)&.name).to eq(parent_class._minigun_task.root_pipeline.find_stage(:producer)&.name)
     end
 
     it 'child inherits parent config' do
