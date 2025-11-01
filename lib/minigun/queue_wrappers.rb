@@ -19,8 +19,8 @@ module Minigun
 
         # Handle EndOfSource signals
         if item.is_a?(EndOfSource)
-          @sources_expected << item.source # Discover dynamic source Stage object
-          @sources_done << item.source
+          @sources_expected << item.stage # Discover dynamic source Stage object
+          @sources_done << item.stage
 
           # All sources done? Return sentinel
           return EndOfStage.new(@stage) if @sources_done == @sources_expected

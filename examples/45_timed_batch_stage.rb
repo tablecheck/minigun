@@ -45,8 +45,8 @@ class TimedBatchStage < Minigun::Stage
         next if item.nil?
 
         if item.is_a?(Minigun::EndOfSource)
-          stage_ctx.sources_expected << item.source # Discover dynamic sources
-          sources_done << item.source
+          stage_ctx.sources_expected << item.stage # Discover dynamic sources
+          sources_done << item.stage
 
           # All sources done?
           if sources_done == stage_ctx.sources_expected

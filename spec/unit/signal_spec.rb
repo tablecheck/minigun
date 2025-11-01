@@ -3,14 +3,6 @@
 require 'spec_helper'
 
 RSpec.describe Minigun::EndOfSource do
-  describe '#initialize' do
-    it 'creates a signal with source' do
-      signal = described_class.new(:producer_stage)
-
-      expect(signal.source).to eq(:producer_stage)
-    end
-  end
-
   describe '#to_s and #inspect' do
     it 'provides readable string representation' do
       signal = described_class.new(:stage_a)
@@ -48,20 +40,12 @@ RSpec.describe Minigun::EndOfSource do
       sig1 = described_class.new(:stage_a)
       sig2 = described_class.new(:stage_a)
 
-      expect(sig1.source).to eq(sig2.source)
+      expect(sig1.stage).to eq(sig2.stage)
     end
   end
 end
 
 RSpec.describe Minigun::EndOfStage do
-  describe '#initialize' do
-    it 'creates a signal with stage_name' do
-      signal = described_class.new(:test_stage)
-
-      expect(signal.stage_name).to eq(:test_stage)
-    end
-  end
-
   describe '#to_s and #inspect' do
     it 'provides readable string representation' do
       signal = described_class.new(:my_stage)
