@@ -13,14 +13,14 @@ module Minigun
     # Register a stage with the registry
     # @param stage [Stage] The stage object to register
     # @param pipeline_name [Symbol] The name of the pipeline this stage belongs to
-    def register(stage, pipeline_name:)
+    def register(pipeline, stage)
       @mutex.synchronize do
         @all_stages << stage
 
         # If stage has a name, register it in the name index
         if stage.name
-          @stages_by_name[pipeline_name] ||= {}
-          @stages_by_name[pipeline_name][stage.name] = stage
+          @stages_by_name[pipeline] ||= {}
+          @stages_by_name[pipeline][stage.name] = stage
         end
       end
     end
@@ -29,8 +29,8 @@ module Minigun
     # @param name [Symbol] The stage name
     # @param pipeline_name [Symbol] The pipeline name
     # @return [Stage, nil] The stage object, or nil if not found
-    def find_by_name(name, pipeline_name)
-      @stages_by_name.dig(pipeline_name, name)
+    def find_by_name(pipeline, name)
+      @stages_by_name.dig(pipeline, name)
     end
 
     # Get all stages

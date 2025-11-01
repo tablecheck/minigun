@@ -54,6 +54,13 @@ module Minigun
       # Use "_" prefix + 8 char random hex
       # TODO: Convert to base62
       @name = :"_#{SecureRandom.hex(4)}" if @name.nil?
+
+      # Register stage with the task's registry (if available)
+      task&.registry&.register(@pipeline, self)
+    end
+
+    def task
+      pipeline&.task
     end
 
     def root_pipeline

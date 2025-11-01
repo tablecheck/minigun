@@ -132,9 +132,6 @@ module Minigun
       # Store stage in array
       @stages << stage
 
-      # Register stage with the task's registry (if available)
-      @task&.registry&.register(stage, pipeline_name: @name)
-
       # Add to DAG (using object reference)
       @dag.add_node(stage)
 
