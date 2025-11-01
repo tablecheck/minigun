@@ -1,6 +1,37 @@
 # frozen_string_literal: true
 
 module Minigun
+  # Wrapper for stages array that provides both array and hash-like access
+  # This maintains backward compatibility with tests that use stages[:name]
+  class StagesCollection < Array
+    def [](key)
+      if key.is_a?(Integer)
+        # Array access: stages[0]
+        super
+      else
+        # Hash access: stages[:name] - find by name
+        find { |stage| stage.name == key }
+      end
+    end
+
+    def []=(key, value)
+      if key.is_a?(Integer)
+        # Array assignment: stages[0] = stage
+        super
+      else
+        # Hash assignment: stages[:name] = stage
+        # Remove any existing stage with this name first
+        delete_if { |stage| stage.name == key }
+        # Add the new stage
+        self << value
+      end
+    end
+
+    def key?(name)
+      any? { |stage| stage.name == name }
+    end
+  end
+
   # Pipeline represents a single data processing pipeline with stages
   # A Pipeline can be standalone or part of a multi-pipeline Task
   class Pipeline
@@ -16,7 +47,7 @@ module Minigun
         use_ipc: config[:use_ipc] || false
       }
 
-      @stages = stages || {} # { stage_name => Stage }
+      @stages = stages || StagesCollection.new # Array of Stage objects with hash-like access
 
       # Pipeline-level hooks (run once per pipeline)
       @hooks = hooks || {
@@ -41,12 +72,21 @@ module Minigun
       @stats = stats # Will be initialized in run() if nil
     end
 
+    # Find a stage by name or object reference
+    def find_stage(name_or_obj)
+      return name_or_obj if name_or_obj.is_a?(Stage)
+      @stages.find { |stage| stage.name == name_or_obj }
+    end
+
     # Duplicate this pipeline for inheritance
     def dup
+      duped_stages = StagesCollection.new
+      @stages.each { |stage| duped_stages << stage.dup }
+      
       Pipeline.new(
         @name,
         @config.dup,
-        stages: @stages.transform_values(&:dup), # Deep copy - dup each stage object
+        stages: duped_stages, # Deep copy - dup each stage object
         hooks: {
           before_run: @hooks[:before_run].dup,
           after_run: @hooks[:after_run].dup,
@@ -116,10 +156,10 @@ module Minigun
               end
 
       # Check for name collision
-      raise Minigun::Error, "Stage name collision: '#{name}' is already defined in pipeline '#{@name}'" if @stages.key?(name)
+      raise Minigun::Error, "Stage name collision: '#{name}' is already defined in pipeline '#{@name}'" if find_stage(name)
 
-      # Store stage by name
-      @stages[name] = stage
+      # Store stage in array
+      @stages << stage
 
       # Add to stage order and DAG
       @stage_order << name
@@ -217,7 +257,7 @@ module Minigun
       @runtime_edges = Concurrent::Hash.new { |h, k| h[k] = Concurrent::Set.new }
 
       # Start unified workers for ALL stages (producers and consumers)
-      @stages.each_value do |stage|
+      @stages.each do |stage|
         worker = Worker.new(self, stage, @config)
         worker.start
         @stage_threads << worker
@@ -231,19 +271,19 @@ module Minigun
     def build_stage_input_queues
       queues = {}
 
-      @stages.each do |stage_name, stage|
+      @stages.each do |stage|
         # Skip autonomous stages - they don't have input queues
         next if stage.run_mode == :autonomous
 
         # Special case: :_entrance uses the parent pipeline's input queue
-        if stage_name == :_entrance && @input_queues && @input_queues[:input]
-          queues[stage_name] = @input_queues[:input]
+        if stage.name == :_entrance && @input_queues && @input_queues[:input]
+          queues[stage.name] = @input_queues[:input]
           next
         end
 
         # Use stage's queue_size setting (bounded SizedQueue or unbounded Queue)
         size = stage.queue_size
-        queues[stage_name] = if size.nil?
+        queues[stage.name] = if size.nil?
                                Queue.new # Unbounded queue
                              else
                                SizedQueue.new(size) # Bounded queue with backpressure
@@ -258,7 +298,8 @@ module Minigun
       stages_to_add = []
       dag_updates = []
 
-      @stages.each do |stage_name, stage|
+      @stages.each do |stage|
+        stage_name = stage.name
         downstream = @dag.downstream(stage_name)
 
         # Fan-out: stage has multiple downstream consumers
@@ -274,7 +315,7 @@ module Minigun
                        else
                          RouterBroadcastStage.new(name: router_name, targets: downstream.dup)
                        end
-        stages_to_add << [router_name, router_stage]
+        stages_to_add << router_stage
 
         # Update DAG: stage -> router -> [downstream targets]
         dag_updates << {
@@ -293,14 +334,10 @@ module Minigun
         update[:add_router_edges].each { |(from, to)| @dag.add_edge(from, to) }
       end
 
-      # Add router stages to @stages
-      stages_to_add.each do |name, stage|
-        @stages[name] = stage
+      # Add router stages to @stages array
+      stages_to_add.each do |stage|
+        @stages << stage
       end
-    end
-
-    def find_stage(name)
-      @stages[name]
     end
 
     def terminal_stage?(stage_name)
@@ -318,11 +355,11 @@ module Minigun
 
     # Helper methods to find stages by characteristics
     def find_producer
-      @stages.values.find { |stage| stage.run_mode == :autonomous }
+      @stages.find { |stage| stage.run_mode == :autonomous }
     end
 
     def find_all_producers
-      @stages.values.select do |stage|
+      @stages.select do |stage|
         if stage.run_mode == :composite
           # Composite stage is a producer if it has no upstream
           @dag.upstream(stage.name).empty?
@@ -424,13 +461,12 @@ module Minigun
     # This receives items from the parent pipeline and distributes to entry stages
     def insert_entrance_distributor_for_inputs!
       # Find stages that have no upstream (would be entry points)
-      entry_stages = @stages.keys.select do |stage_name|
-        stage = @stages[stage_name]
+      entry_stages = @stages.select do |stage|
         # Skip autonomous stages (they're producers)
         next false if stage.run_mode == :autonomous
         # Entry stages have no upstream
-        @dag.upstream(stage_name).empty?
-      end
+        @dag.upstream(stage.name).empty?
+      end.map(&:name)
 
       return if entry_stages.empty?
 
@@ -444,7 +480,7 @@ module Minigun
       entrance_stage = Minigun::ConsumerStage.new(name: :_entrance, block: entrance_block, options: {})
 
       # Add the :_entrance stage to the pipeline
-      @stages[:_entrance] = entrance_stage
+      @stages << entrance_stage
       @stage_order.unshift(:_entrance) # Add at beginning
       @dag.add_node(:_entrance)
 
@@ -460,7 +496,7 @@ module Minigun
     # This allows nested pipelines to send their outputs to the parent pipeline
     def insert_exit_collector_for_outputs!
       # Find terminal stages (stages with no downstream)
-      terminal_stages = @stages.keys.select { |stage_name| @dag.terminal?(stage_name) }
+      terminal_stages = @stages.select { |stage| @dag.terminal?(stage.name) }.map(&:name)
       return if terminal_stages.empty?
 
       # Create a consumer stage that forwards items to @output_queues[:output]
@@ -472,7 +508,7 @@ module Minigun
       exit_stage = Minigun::ConsumerStage.new(name: :_exit, block: exit_block, options: {})
 
       # Add the :_exit stage to the pipeline
-      @stages[:_exit] = exit_stage
+      @stages << exit_stage
       @stage_order << :_exit
       @dag.add_node(:_exit)
 

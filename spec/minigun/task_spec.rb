@@ -15,7 +15,8 @@ RSpec.describe Minigun::Task do
     end
 
     it 'initializes empty stages' do
-      expect(task.stages).to eq({})
+      expect(task.stages).to be_a(Minigun::StagesCollection)
+      expect(task.stages).to be_empty
     end
 
     it 'initializes empty hooks' do

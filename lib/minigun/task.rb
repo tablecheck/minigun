@@ -36,8 +36,8 @@ module Minigun
 
     # Get all named pipelines (composite stages in root_pipeline)
     def pipelines
-      @root_pipeline.stages.select { |_name, stage| stage.run_mode == :composite }
-                    .transform_values(&:pipeline)
+      @root_pipeline.stages.select { |stage| stage.run_mode == :composite }
+                    .to_h { |stage| [stage.name, stage.pipeline] }
     end
 
     # Get the DAG for pipeline-level routing
@@ -71,7 +71,7 @@ module Minigun
       end
 
       # Add the pipeline stage to the implicit pipeline
-      @root_pipeline.stages[name] = pipeline_stage
+      @root_pipeline.stages << pipeline_stage
       @root_pipeline.stage_order << name
       @root_pipeline.dag.add_node(name)
 
@@ -86,8 +86,9 @@ module Minigun
     # Pipelines are just PipelineStage objects in root_pipeline
     def define_pipeline(name, options = {})
       # Check if already exists
-      if @root_pipeline.stages.key?(name)
-        pipeline_stage = @root_pipeline.stages[name]
+      pipeline_stage = @root_pipeline.find_stage(name)
+      
+      if pipeline_stage
         raise Minigun::Error, "Stage #{name} already exists as a non-composite stage" unless pipeline_stage.run_mode == :composite
 
         pipeline = pipeline_stage.pipeline
@@ -97,7 +98,7 @@ module Minigun
         pipeline = Pipeline.new(name, @config)
         pipeline_stage.pipeline = pipeline
 
-        @root_pipeline.stages[name] = pipeline_stage
+        @root_pipeline.stages << pipeline_stage
         @root_pipeline.stage_order << name
         @root_pipeline.dag.add_node(name)
       end

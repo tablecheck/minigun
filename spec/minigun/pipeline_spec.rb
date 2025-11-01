@@ -22,7 +22,8 @@ RSpec.describe Minigun::Pipeline do
     end
 
     it 'initializes empty stages' do
-      expect(pipeline.stages).to eq({})
+      expect(pipeline.stages).to be_a(Minigun::StagesCollection)
+      expect(pipeline.stages).to be_empty
     end
 
     it 'initializes a DAG for stage routing' do
