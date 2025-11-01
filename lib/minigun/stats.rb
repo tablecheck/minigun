@@ -203,7 +203,7 @@ module Minigun
     def [](key)
       # If key is a Stage object, look up directly
       return @stage_stats[key] if key.is_a?(Stage)
-      
+
       # If key is a name, find the stage object with that name
       @stage_stats.each do |stage, stats|
         return stats if stage.is_a?(Stage) && stage.name == key
@@ -231,7 +231,7 @@ module Minigun
   # Aggregates statistics from multiple stages using DAG
   class AggregatedStats
     attr_reader :pipeline_name, :dag
-    
+
     # Provide stage_stats that supports both object and name-based lookup
     def stage_stats
       @stage_stats_wrapper ||= StageStatsWrapper.new(@stage_stats)

@@ -198,7 +198,7 @@ RSpec.describe Minigun::Worker do
     let(:target_a_stage) { Minigun::ConsumerStage.new(name: :target_a, block: proc {}, options: {}) }
     let(:target_b_stage) { Minigun::ConsumerStage.new(name: :target_b, block: proc {}, options: {}) }
     let(:source_stage) { Minigun::ProducerStage.new(name: :source, block: proc {}, options: {}) }
-    
+
     let(:broadcast_router) do
       Minigun::RouterBroadcastStage.new(
         name: :router,

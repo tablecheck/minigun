@@ -63,7 +63,7 @@ RSpec.describe Minigun::Pipeline do
       source = pipeline.find_stage(:source)
       transform = pipeline.find_stage(:transform)
       save = pipeline.find_stage(:save)
-      
+
       expect(pipeline.dag.downstream(source)).to include(transform)
       expect(pipeline.dag.downstream(transform)).to include(save)
     end
@@ -265,7 +265,7 @@ RSpec.describe Minigun::Pipeline do
       process_a = pipeline.find_stage(:process_a)
       source_b = pipeline.find_stage(:source_b)
       process_b = pipeline.find_stage(:process_b)
-      
+
       # source_a should connect to process_a
       expect(pipeline.dag.downstream(source_a)).to include(process_a)
       # source_b should connect to process_b
@@ -284,7 +284,7 @@ RSpec.describe Minigun::Pipeline do
       process_a = pipeline.find_stage(:process_a)
       source_b = pipeline.find_stage(:source_b)
       process_b = pipeline.find_stage(:process_b)
-      
+
       # source_a already has explicit routing to process_a
       expect(pipeline.dag.downstream(source_a)).to eq([process_a])
       # source_b should still get sequential routing
@@ -302,7 +302,7 @@ RSpec.describe Minigun::Pipeline do
       source_a = pipeline.find_stage(:source_a)
       sink = pipeline.find_stage(:sink)
       source_b = pipeline.find_stage(:source_b)
-      
+
       # source_a routes to sink, source_b has no downstream
       expect(pipeline.dag.downstream(source_a)).to include(sink)
       expect(pipeline.dag.downstream(source_b)).to be_empty
@@ -324,7 +324,7 @@ RSpec.describe Minigun::Pipeline do
       process_b = pipeline.find_stage(:process_b)
       source_c = pipeline.find_stage(:source_c)
       sink = pipeline.find_stage(:sink)
-      
+
       # Each producer connects to its next stage
       expect(pipeline.dag.downstream(source_a)).to include(process_a)
       expect(pipeline.dag.downstream(source_b)).to include(process_b)
@@ -351,7 +351,7 @@ RSpec.describe Minigun::Pipeline do
       atomic_source = pipeline.find_stage(:atomic_source)
       process_atomic = pipeline.find_stage(:process_atomic)
       sink = pipeline.find_stage(:sink)
-      
+
       # Atomic routes to process_atomic
       expect(pipeline.dag.downstream(atomic_source)).to include(process_atomic)
       # Pipeline routes to sink
