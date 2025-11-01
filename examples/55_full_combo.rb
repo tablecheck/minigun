@@ -62,7 +62,7 @@ class FullComboExample
       end
     end
 
-    processor :save_db, execution_context: :db_pool do |item|
+    processor :save_db, execution_context: :db_pool do |item, output|
       output << item
     end
 

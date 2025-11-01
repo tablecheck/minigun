@@ -196,14 +196,19 @@ module Minigun
 
   # Aggregates statistics from multiple stages using DAG
   class AggregatedStats
-    attr_reader :pipeline_name, :dag, :stage_stats
+    attr_reader :pipeline, :dag, :stage_stats
 
-    def initialize(pipeline_name, dag)
-      @pipeline_name = pipeline_name # REMOVE_THIS, should be direct pipeline reference
+    def initialize(pipeline, dag)
+      @pipeline = pipeline # Direct pipeline reference
       @dag = dag
       @stage_stats = {}
       @start_time = nil
       @end_time = nil
+    end
+
+    # Backward compatibility method
+    def pipeline_name
+      @pipeline.name
     end
 
     # Get or create stats for a stage
@@ -267,7 +272,7 @@ module Minigun
     # Generate summary hash
     def to_h
       {
-        pipeline: @pipeline_name,
+        pipeline: @pipeline.name,
         runtime: runtime.round(2),
         total_produced: total_produced,
         total_consumed: total_consumed,
@@ -286,7 +291,7 @@ module Minigun
     # Pretty print summary
     def summary
       lines = []
-      lines << "Pipeline: #{@pipeline_name}"
+      lines << "Pipeline: #{@pipeline.name}"
       lines << "Runtime: #{runtime.round(2)}s"
       lines << "Items: #{total_produced} produced, #{total_consumed} consumed"
       lines << "Throughput: #{throughput.round(2)} items/s"
