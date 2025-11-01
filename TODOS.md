@@ -71,6 +71,14 @@ ipc_fork
 ipc_forks(10) do # creates a pipeline
 
 ractors
+=
+
+=====================================================
+
+think about potential for conflicts with the base context
+
+thread_pool
+cow_fork_pool
 
 
       # Execution block methods
@@ -154,6 +162,31 @@ I see the issue now - when you're inside a pipeline block, the stages within it 
 - cow_fork doing IPC output
 - ipc 2 cow, cow to ipc, ipc to master
 - ipc/cow fan-out/fan-in
+- routing to inner stages of pipelines
+- routing to inner stages of cow and ipc fork via an ingress delegator
+
+===================================
+
+        # Skip router stages - they're added during insert_router_stages_for_fan_out
+        # which happens before validation, so they should exist
+        next if node_name.to_s.end_with?('_router')
+
+        # Skip internal stages that are created dynamically
+        next if node_name == :_entrance || node_name == :_exit
+
+        # Skip if it's a hash (shouldn't happen, but defensive)
+        next if node_name.is_a?(Hash)
+
+        unless find_stage(node_name)
+          raise Minigun::Error, "[Pipeline:#{@name}] Routing references non-existent stage '#{node_name}'"
+
+============================
+
+- rename end_of_stage --> end_of_all_upstreams?
+
+==================================
+
+- harden --> add inputoutputstream
 
 ==================================
 

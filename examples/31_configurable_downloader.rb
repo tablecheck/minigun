@@ -7,10 +7,10 @@ require_relative '../lib/minigun'
 class ConfigurableDownloader
   include Minigun::DSL
 
-  attr_reader :results, :threads, :batch_size
+  attr_reader :results, :thread_count, :batch_size
 
   def initialize(threads: 10, batch_size: 100)
-    @threads = threads
+    @thread_count = threads
     @batch_size = batch_size
     @results = []
     @mutex = Mutex.new
@@ -22,7 +22,7 @@ class ConfigurableDownloader
     end
 
     # Use instance variable for thread count
-    threads(@threads) do
+    threads(@thread_count) do
       processor :download do |url, output|
         # Simulate download
         sleep 0.01
@@ -46,9 +46,9 @@ if __FILE__ == $PROGRAM_NAME
   large_pipeline = ConfigurableDownloader.new(threads: 20, batch_size: 50)
 
   puts "Small pipeline (5 threads, batch 10):"
-  puts "  Configuration: threads=#{small_pipeline.threads}, batch=#{small_pipeline.batch_size}"
+  puts "  Configuration: threads=#{small_pipeline.thread_count}, batch=#{small_pipeline.batch_size}"
 
   puts "\nLarge pipeline (20 threads, batch 50):"
-  puts "  Configuration: threads=#{large_pipeline.threads}, batch=#{large_pipeline.batch_size}"
+  puts "  Configuration: threads=#{large_pipeline.thread_count}, batch=#{large_pipeline.batch_size}"
 end
 
