@@ -194,9 +194,48 @@ module Minigun
     end
   end
 
+  # Wrapper around stage_stats hash that supports both object and name-based lookup
+  class StageStatsWrapper
+    def initialize(stage_stats_hash)
+      @stage_stats = stage_stats_hash
+    end
+
+    def [](key)
+      # If key is a Stage object, look up directly
+      return @stage_stats[key] if key.is_a?(Stage)
+      
+      # If key is a name, find the stage object with that name
+      @stage_stats.each do |stage, stats|
+        return stats if stage.is_a?(Stage) && stage.name == key
+      end
+      nil
+    end
+
+    def each(&block)
+      @stage_stats.each(&block)
+    end
+
+    def values
+      @stage_stats.values
+    end
+
+    def keys
+      @stage_stats.keys
+    end
+
+    def size
+      @stage_stats.size
+    end
+  end
+
   # Aggregates statistics from multiple stages using DAG
   class AggregatedStats
-    attr_reader :pipeline_name, :stage_stats
+    attr_reader :pipeline_name, :dag
+    
+    # Provide stage_stats that supports both object and name-based lookup
+    def stage_stats
+      @stage_stats_wrapper ||= StageStatsWrapper.new(@stage_stats)
+    end
 
     def initialize(pipeline_name, dag)
       @pipeline_name = pipeline_name
