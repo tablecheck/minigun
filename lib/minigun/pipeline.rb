@@ -131,14 +131,17 @@ module Minigun
       end
 
       # Create stage instance
+      puts "[DEBUG] Creating stage: #{name.inspect} of type: #{type.inspect}" if ENV['DEBUG_MINIGUN']
       stage = if type.is_a?(Class)
                 # Custom stage class provided (positional constructor style)
+                puts "[DEBUG] Creating custom stage class: #{type}" if ENV['DEBUG_MINIGUN']
                 type.new(self, name, block, options)
               else
                 # Extract stage_type from options if present (used by DSL)
                 actual_type = options.delete(:stage_type) || type
 
                 # Create appropriate stage subclass based on type symbol (pipeline-first positional style)
+                puts "[DEBUG] Creating built-in stage type: #{actual_type}" if ENV['DEBUG_MINIGUN']
                 case actual_type
                 when :producer
                   ProducerStage.new(self, name, block, options)
@@ -152,6 +155,7 @@ module Minigun
                   raise Minigun::Error, "Unknown stage type: #{actual_type}"
                 end
               end
+      puts "[DEBUG] Created stage: #{stage.inspect}" if ENV['DEBUG_MINIGUN']
 
       # Check for name collision
       raise Minigun::Error, "Stage name collision: '#{name}' is already defined in pipeline '#{@name}'" if find_stage(name)
@@ -165,22 +169,30 @@ module Minigun
 
       # Add routing edges - resolve names to Stage objects immediately
       if to_targets
+        puts "[DEBUG] Adding to_targets: #{to_targets.inspect} for stage #{name}" if ENV['DEBUG_MINIGUN']
         Array(to_targets).each do |target|
+          puts "[DEBUG] Looking for target: #{target.inspect}" if ENV['DEBUG_MINIGUN']
           if (target_stage = find_stage(target))
+            puts "[DEBUG] Found target_stage: #{target_stage.inspect}" if ENV['DEBUG_MINIGUN']
             @dag.add_edge(stage, target_stage)
           else
             # Forward reference - defer until target is created
+            puts "[DEBUG] Deferring edge: #{stage.name} -> #{target}" if ENV['DEBUG_MINIGUN']
             @deferred_edges << { from: stage, to: target }
           end
         end
       end
 
       if from_sources
+        puts "[DEBUG] Adding from_sources: #{from_sources.inspect} for stage #{name}" if ENV['DEBUG_MINIGUN']
         Array(from_sources).each do |source|
+          puts "[DEBUG] Looking for source: #{source.inspect}" if ENV['DEBUG_MINIGUN']
           if (source_stage = find_stage(source))
+            puts "[DEBUG] Found source_stage: #{source_stage.inspect}" if ENV['DEBUG_MINIGUN']
             @dag.add_edge(source_stage, stage)
           else
             # Forward reference - defer until source is created
+            puts "[DEBUG] Deferring edge: #{source} -> #{stage.name}" if ENV['DEBUG_MINIGUN']
             @deferred_edges << { from: source, to: stage }
           end
         end

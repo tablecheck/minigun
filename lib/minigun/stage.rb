@@ -31,6 +31,10 @@ module Minigun
     def pipeline
       stage&.pipeline
     end
+
+    def root_pipeline
+      stage&.root_pipeline
+    end
   end
 
   # Base class for all execution units (stages and pipelines)
@@ -50,6 +54,10 @@ module Minigun
       # Use "_" prefix + 8 char random hex
       # TODO: Convert to base62
       @name = :"_#{SecureRandom.hex(4)}" if @name.nil?
+    end
+
+    def root_pipeline
+      pipeline&.root_pipeline
     end
 
     # Get the queue size for this stage

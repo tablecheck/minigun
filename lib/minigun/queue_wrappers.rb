@@ -63,12 +63,21 @@ module Minigun
       # Return cached instance if available (cache by original key for user convenience)
       return @to_cache[target] if @to_cache.key?(target)
 
+      # DEBUG: Log what we're trying to route to
+      puts "[DEBUG] OutputQueue.to called with target: #{target.inspect} (type: #{target.class})"
+      puts "[DEBUG] @stage: #{@stage.inspect}"
+      puts "[DEBUG] @stage.pipeline: #{@stage.pipeline.inspect}"
+
       # Resolve target to Stage object if it's a name
-      target_stage = target.is_a?(Stage) ? target : pipeline&.find_stage(target)
+      target_stage = pipeline.find_stage(target)
+
+      puts "[DEBUG] target_stage resolved to: #{target_stage.inspect}"
       raise ArgumentError, "Unknown target stage: #{target}" unless target_stage
 
       # Look up queue by Stage object
       target_queue = @all_stage_queues[target_stage]
+      puts "[DEBUG] target_queue found: #{!target_queue.nil?}"
+      puts "[DEBUG] Available queues: #{@all_stage_queues.keys.map(&:name)}"
       raise ArgumentError, "Unknown target stage: #{target} (resolved to #{target_stage.name})" unless target_queue
 
       # Track this as a runtime edge for END signal handling
