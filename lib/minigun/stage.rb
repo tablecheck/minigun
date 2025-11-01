@@ -33,7 +33,7 @@ module Minigun
     end
 
     def root_pipeline
-      stage&.root_pipeline
+      pipeline&.root_pipeline
     end
   end
 
@@ -93,7 +93,7 @@ module Minigun
       output_queue = create_output_queue(stage_ctx)
 
       # Execute with both queues (block manages its own loop)
-      context = stage_ctx.pipeline.context
+      context = stage_ctx.root_pipeline.context
       execute(context, input_queue, output_queue, stage_ctx.stage_stats)
     ensure
       send_end_signals(stage_ctx)
@@ -210,7 +210,7 @@ module Minigun
       output_queue = create_output_queue(stage_ctx)
 
       # Execute producer block directly (ProducerStage doesn't use executor since it's autonomous)
-      context = stage_ctx.pipeline.context
+      context = stage_ctx.root_pipeline.context
       execute(context, nil, output_queue, stage_ctx.stage_stats)
 
       # Execute after hooks
@@ -222,7 +222,7 @@ module Minigun
     private
 
     def execute_hooks(ctx, type)
-      ctx.pipeline.execute_stage_hooks(type, ctx.stage)
+      ctx.root_pipeline.execute_stage_hooks(type, ctx.stage)
     end
   end
 
@@ -257,18 +257,18 @@ module Minigun
 
     def run_stage(stage_ctx)
       # Execute before hooks
-      stage_ctx.pipeline.send(:execute_stage_hooks, :before, stage_ctx.stage)
+      stage_ctx.root_pipeline.send(:execute_stage_hooks, :before, stage_ctx.stage)
 
       # Create wrapped queues
       input_queue = create_input_queue(stage_ctx)
       output_queue = create_output_queue(stage_ctx)
 
       # Execute via executor (defines HOW: inline/threaded/process)
-      context = stage_ctx.pipeline.context
+      context = stage_ctx.root_pipeline.context
       stage_ctx.executor.execute_stage(self, context, input_queue, output_queue)
 
       # Execute after hooks
-      stage_ctx.pipeline.send(:execute_stage_hooks, :after, stage_ctx.stage)
+      stage_ctx.root_pipeline.send(:execute_stage_hooks, :after, stage_ctx.stage)
 
       # Flush and cleanup
       flush_if_needed(stage_ctx, output_queue)
@@ -281,7 +281,7 @@ module Minigun
     def flush_if_needed(stage_ctx, output_queue)
       return unless respond_to?(:flush)
 
-      context = stage_ctx.pipeline.context
+      context = stage_ctx.root_pipeline.context
       flush(context, output_queue)
     end
   end
@@ -497,7 +497,7 @@ module Minigun
       @nested_pipeline.instance_variable_set(:@output_queues, { output: create_output_queue(stage_ctx) })
 
       # Run the nested pipeline (it will automatically create :_entrance/:_exit as needed)
-      @nested_pipeline.run(stage_ctx.pipeline.context)
+      @nested_pipeline.run(stage_ctx.root_pipeline.context)
     ensure
       send_end_signals(stage_ctx)
     end

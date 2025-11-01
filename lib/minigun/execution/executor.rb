@@ -164,7 +164,7 @@ module Minigun
 
         # Execute before_fork hooks in parent process (once, before any forks)
         # This executes both pipeline-level and stage-specific hooks
-        @stage_ctx.pipeline&.send(:execute_fork_hooks, :before_fork, stage.name)
+        @stage_ctx.root_pipeline&.send(:execute_fork_hooks, :before_fork, stage.name)
 
         all_items_queued = false
 
@@ -213,7 +213,7 @@ module Minigun
         reader, writer = IO.pipe
 
         stage_stats = @stage_ctx.stage_stats
-        pipeline = @stage_ctx.pipeline
+        pipeline = @stage_ctx.root_pipeline
 
         # Fork child process - item is COW-shared (read-only, no copy until modified)
         pid = fork do
@@ -346,7 +346,7 @@ module Minigun
 
         # Execute before_fork hooks in parent process (before spawning workers)
         # This executes both pipeline-level and stage-specific hooks
-        @stage_ctx.pipeline&.send(:execute_fork_hooks, :before_fork, stage.name)
+        @stage_ctx.root_pipeline&.send(:execute_fork_hooks, :before_fork, stage.name)
 
         # Spawn persistent worker processes
         spawn_workers(stage, user_context)
@@ -399,7 +399,7 @@ module Minigun
 
       def spawn_workers(stage, user_context)
         stage_stats = @stage_ctx.stage_stats
-        pipeline = @stage_ctx.pipeline
+        pipeline = @stage_ctx.root_pipeline
 
         @max_size.times do
           # Create bidirectional pipes for IPC
