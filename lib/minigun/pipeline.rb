@@ -277,7 +277,7 @@ module Minigun
       @job_id = job_id
 
       # Initialize statistics tracking
-      @stats = AggregatedStats.new(@name, @dag)
+      @stats = AggregatedStats.new(self, @dag)
       @stats.start!
 
       log_debug "#{log_prefix} Starting"
