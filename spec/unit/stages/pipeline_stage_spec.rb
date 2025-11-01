@@ -4,10 +4,11 @@ require 'spec_helper'
 
 RSpec.describe Minigun::PipelineStage do
   let(:config) { { max_threads: 2, max_processes: 1 } }
+  let(:mock_pipeline) { instance_double(Minigun::Pipeline, name: 'test_pipeline') }
 
   describe '#initialize' do
     it 'creates a PipelineStage without a pipeline initially' do
-      stage = described_class.new(name: :my_pipeline)
+      stage = described_class.new(mock_pipeline, :my_pipeline, nil, {})
       expect(stage.name).to eq(:my_pipeline)
       expect(stage.pipeline).to be_nil
     end
@@ -15,14 +16,14 @@ RSpec.describe Minigun::PipelineStage do
 
   describe '#run_mode' do
     it 'returns :composite' do
-      stage = described_class.new(name: :my_pipeline)
+      stage = described_class.new(mock_pipeline, :my_pipeline, nil, {})
       expect(stage.run_mode).to eq(:composite)
     end
   end
 
   describe '#pipeline=' do
     it 'sets the pipeline' do
-      stage = described_class.new(name: :my_pipeline)
+      stage = described_class.new(mock_pipeline, :my_pipeline, nil, {})
       pipeline = Minigun::Pipeline.new(:test, config)
 
       stage.pipeline = pipeline
@@ -31,7 +32,7 @@ RSpec.describe Minigun::PipelineStage do
     end
 
     it 'allows setting pipeline to nil' do
-      stage = described_class.new(name: :my_pipeline)
+      stage = described_class.new(mock_pipeline, :my_pipeline, nil, {})
       pipeline = Minigun::Pipeline.new(:test, config)
       stage.pipeline = pipeline
 
@@ -43,7 +44,7 @@ RSpec.describe Minigun::PipelineStage do
 
   describe '#run_stage' do
     it 'returns early if no pipeline is set' do
-      stage = described_class.new(name: :my_pipeline)
+      stage = described_class.new(mock_pipeline, :my_pipeline, nil, {})
       stage_ctx = instance_double(Minigun::StageContext,
                                   pipeline: instance_double(Minigun::Pipeline, context: Object.new),
                                   stage: stage,
@@ -59,7 +60,7 @@ RSpec.describe Minigun::PipelineStage do
     end
 
     it 'runs the nested pipeline when pipeline is set' do
-      stage = described_class.new(name: :my_pipeline)
+      stage = described_class.new(mock_pipeline, :my_pipeline, nil, {})
       pipeline = instance_double(Minigun::Pipeline)
       stage.pipeline = pipeline
 
@@ -85,7 +86,7 @@ RSpec.describe Minigun::PipelineStage do
     end
 
     it 'sets input_queues when stage has upstream sources' do
-      stage = described_class.new(name: :my_pipeline)
+      stage = described_class.new(mock_pipeline, :my_pipeline, nil, {})
       pipeline = instance_double(Minigun::Pipeline)
       stage.pipeline = pipeline
 
@@ -117,7 +118,7 @@ RSpec.describe Minigun::PipelineStage do
     end
 
     it 'always sets output_queues' do
-      stage = described_class.new(name: :my_pipeline)
+      stage = described_class.new(mock_pipeline, :my_pipeline, nil, {})
       pipeline = instance_double(Minigun::Pipeline)
       stage.pipeline = pipeline
 
@@ -144,7 +145,7 @@ RSpec.describe Minigun::PipelineStage do
     end
 
     it 'sends end signals to downstream stages after pipeline completes' do
-      stage = described_class.new(name: :my_pipeline)
+      stage = described_class.new(mock_pipeline, :my_pipeline, nil, {})
       pipeline = instance_double(Minigun::Pipeline)
       stage.pipeline = pipeline
 
@@ -170,7 +171,7 @@ RSpec.describe Minigun::PipelineStage do
     end
 
     it 'sends end signals even if pipeline raises an error' do
-      stage = described_class.new(name: :my_pipeline)
+      stage = described_class.new(mock_pipeline, :my_pipeline, nil, {})
       pipeline = instance_double(Minigun::Pipeline)
       stage.pipeline = pipeline
 

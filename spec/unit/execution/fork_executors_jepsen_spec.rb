@@ -30,12 +30,16 @@ RSpec.describe 'Fork Executors - Jepsen-style Tests', skip: Gem.win_platform? do
   def create_stage(name: 'test_stage', processor: nil, expects_context: false)
     processor ||= ->(item, output) { output << (item * 2) }
 
+    # Create a mock pipeline for stage construction
+    mock_pipeline = instance_double(Minigun::Pipeline, name: 'test_pipeline')
+    
     # Create real ConsumerStage with a block that processes (item, output)
     # RSpec mocks don't work across forks, so we need real objects
     # ConsumerStage#execute handles the input loop and calls block per item
     Minigun::ConsumerStage.new(
-      name: name,
-      block: proc { |item, output_queue|
+      mock_pipeline,
+      name.to_sym,
+      proc { |item, output_queue|
         # Block is executed via instance_exec(user_context), so 'self' is the user context
         # If expects_context=true, pass user context to processor; otherwise pass output_queue
         result = if expects_context
@@ -48,7 +52,8 @@ RSpec.describe 'Fork Executors - Jepsen-style Tests', skip: Gem.win_platform? do
         if result && result != output_queue && !result.is_a?(Minigun::OutputQueue) && !result.is_a?(Minigun::IpcOutputQueue)
           output_queue << result
         end
-      }
+      },
+      {}  # options parameter
     )
   end
 
