@@ -48,7 +48,7 @@ module Minigun
         use_ipc: config[:use_ipc] || false
       }
 
-      @stages = stages || StagesCollection.new # REMOVE_THIS - Array of Stage objects with hash-like access
+      @stages = stages || StagesCollection.new # REMOVE_THIS - implement NameRegistry Array of Stage objects with hash-like access
       @deferred_edges = [] # Store edges with forward references: [{from: stage, to: :name}, ...]
 
       # Pipeline-level hooks (run once per pipeline)
@@ -328,8 +328,8 @@ module Minigun
         # Skip autonomous stages - they don't have input queues
         next if stage.run_mode == :autonomous
 
-        # Special case: :_entrance uses the parent pipeline's input queue
-        if stage.name == :_entrance && @input_queues && @input_queues[:input] # REMOVE_THIS -- do not reference anything by name (:_entrance, :_exit)
+        # Special case: EntranceStage uses the parent pipeline's input queue
+        if stage.is_a?(EntranceStage) && @input_queues && @input_queues[:input]
           queues[stage] = @input_queues[:input]  # Key by object
           next
         end
@@ -432,9 +432,9 @@ module Minigun
       # Finalize any remaining deferred edges
       process_deferred_edges!
 
-      # Check for unresolved forward references
+      # Check for unresolved forward references (edges)
       unless @deferred_edges.empty?
-        unresolved = @deferred_edges.map { |e| "#{e[:from]} -> #{e[:to]}" }.join(", ")
+        unresolved = @deferred_edges.map { |e| "#{e[:from].inspect} -> #{e[:to].inspect}" }.join(", ")
         raise Minigun::Error, "[Pipeline:#{@name}] Unresolved routing references: #{unresolved}"
       end
 
@@ -544,7 +544,7 @@ module Minigun
         # Just forward items from parent to nested pipeline
         output << item
       end
-      entrance_stage = Minigun::ConsumerStage.new(name: :_entrance, block: entrance_block, options: {})
+      entrance_stage = Minigun::EntranceStage.new(block: entrance_block)
 
       # Add the :_entrance stage to the pipeline
       @stages << entrance_stage
@@ -574,7 +574,7 @@ module Minigun
       exit_block = proc do |item, _stage_output|
         parent_output << item if parent_output
       end
-      exit_stage = Minigun::ConsumerStage.new(name: :_exit, block: exit_block, options: {})
+      exit_stage = Minigun::ExitStage.new(block: exit_block)
 
       # Add the :_exit stage to the pipeline
       @stages << exit_stage

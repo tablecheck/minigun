@@ -130,6 +130,14 @@ module Minigun
       :streaming # Default: process stream of items in worker loop
     end
 
+    def to_s
+      "#{self.class.name}(#{name})"
+    end
+
+    def inspect
+      to_s
+    end
+
     private
 
     # Create wrapped input queue for this stage

@@ -3,12 +3,12 @@
 require 'spec_helper'
 
 RSpec.describe Minigun::Stats do
-  let(:test_stage) { double('Stage', name: :test_stage) }
+  let(:test_stage) { double('Stage', name: 'test_stage') }
 
   describe '#initialize' do
     it 'creates stats with stage object' do
       stats = described_class.new(test_stage)
-      expect(stats.stage_name).to eq(:test_stage)
+      expect(stats.stage_name).to eq('test_stage')
     end
 
     it 'defaults is_terminal to false' do
@@ -17,9 +17,9 @@ RSpec.describe Minigun::Stats do
     end
 
     it 'accepts is_terminal parameter' do
-      stats = described_class.new(:test_stage, is_terminal: true)
+      stats = described_class.new(test_stage, is_terminal: true)
       stats.items_consumed # Just verify it was set
-      expect(stats.stage_name).to eq(:test_stage)
+      expect(stats.stage_name).to eq('test_stage')
     end
   end
 
@@ -487,7 +487,7 @@ RSpec.describe Minigun::AggregatedStats do
       stage_stats = agg_stats.for_stage(:producer)
 
       expect(stage_stats).to be_a(Minigun::Stats)
-      expect(stage_stats.stage_name).to eq(:producer)
+      expect(stage_stats.stage_name).to eq('producer')
     end
 
     it 'returns same stats instance for same stage' do
@@ -662,7 +662,7 @@ RSpec.describe Minigun::AggregatedStats do
 
       bottleneck = agg_stats.bottleneck
       expect(bottleneck).to be_a(Minigun::Stats)
-      expect(bottleneck.stage_name).to eq(:processor)
+      expect(bottleneck.stage_name).to eq('processor')
     end
   end
 
@@ -675,7 +675,7 @@ RSpec.describe Minigun::AggregatedStats do
       agg_stats.for_stage(:consumer)
 
       stages = agg_stats.stages_in_order
-      expect(stages.map(&:stage_name)).to eq(%i[producer processor consumer])
+      expect(stages.map(&:stage_name)).to eq(%w[producer processor consumer])
     end
 
     it 'skips stages without stats' do
@@ -686,7 +686,7 @@ RSpec.describe Minigun::AggregatedStats do
       # processor is skipped
 
       stages = agg_stats.stages_in_order
-      expect(stages.map(&:stage_name)).to eq(%i[producer consumer])
+      expect(stages.map(&:stage_name)).to eq(%w[producer consumer])
     end
   end
 
@@ -721,7 +721,7 @@ RSpec.describe Minigun::AggregatedStats do
 
       hash = agg_stats.to_h
       expect(hash[:bottleneck]).to be_a(Hash)
-      expect(hash[:bottleneck][:stage]).to eq(:producer)
+      expect(hash[:bottleneck][:stage]).to eq('producer')
       expect(hash[:bottleneck][:throughput]).to be_a(Numeric)
     end
   end
