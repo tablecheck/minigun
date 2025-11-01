@@ -190,7 +190,7 @@ RSpec.describe Minigun::Pipeline do
 
     it 'finds PipelineStages with no upstream as producers' do
       # Add a PipelineStage (positional constructor style)
-      nested_pipeline = described_class.new(:nested, nil, config)
+      nested_pipeline = described_class.new(:nested, nil, nil, config)
       pipeline_stage = Minigun::PipelineStage.new(:nested, pipeline, nested_pipeline, nil, {})
       pipeline.stages.clear
       pipeline.stages << pipeline_stage
@@ -208,7 +208,7 @@ RSpec.describe Minigun::Pipeline do
       pipeline.add_stage(:producer, :source) { output << 1 }
 
       # Add a PipelineStage with upstream (positional constructor style)
-      nested_pipeline = described_class.new(:nested, nil, config)
+      nested_pipeline = described_class.new(:nested, nil, nil, config)
       pipeline_stage = Minigun::PipelineStage.new(:nested, pipeline, nested_pipeline, nil, {})
       pipeline.stages << pipeline_stage
 
@@ -228,7 +228,7 @@ RSpec.describe Minigun::Pipeline do
       pipeline.add_stage(:producer, :atomic_source) { output << 1 }
 
       # Add PipelineStage producer
-      nested_pipeline = described_class.new(:nested, nil, config)
+      nested_pipeline = described_class.new(:nested, nil, nil, config)
       pipeline_stage = Minigun::PipelineStage.new(:pipeline_source, pipeline, nested_pipeline, nil, {})
       pipeline.stages << pipeline_stage
       pipeline.dag.add_node(pipeline_stage)
@@ -336,7 +336,7 @@ RSpec.describe Minigun::Pipeline do
       pipeline.add_stage(:processor, :process_atomic) { |item| output << (item * 10) }
 
       # PipelineStage producer
-      nested_pipeline = described_class.new(:nested, nil, config)
+      nested_pipeline = described_class.new(:nested, nil, nil, config)
       pipeline_stage = Minigun::PipelineStage.new(:pipeline_source, pipeline, nested_pipeline, nil, {})
       pipeline.stages << pipeline_stage
       pipeline.dag.add_node(pipeline_stage)    # Use object
@@ -371,7 +371,7 @@ RSpec.describe Minigun::Pipeline do
       end.new
 
       # Create PipelineStage that acts as a producer
-      source_pipeline = described_class.new(:source, pipeline, config)
+      source_pipeline = described_class.new(:source, nil, pipeline, config)
       pipeline_stage = Minigun::PipelineStage.new(:source_pipeline, pipeline, source_pipeline, nil, {})
       source_pipeline.add_stage(:producer, :gen) { |output| 3.times { |i| output << i } }
       source_pipeline.add_stage(:processor, :double) { |item, output| output << (item * 2) }
@@ -402,7 +402,7 @@ RSpec.describe Minigun::Pipeline do
       pipeline.add_stage(:producer, :source) { |output| 3.times { |i| output << i } }
 
       # PipelineStage as processor
-      proc_pipeline = described_class.new(:processor, pipeline, config)
+      proc_pipeline = described_class.new(:processor, nil, pipeline, config)
       pipeline_stage = Minigun::PipelineStage.new(:processor_pipeline, pipeline, proc_pipeline, nil, {})
       proc_pipeline.add_stage(:processor, :multiply) { |item, output| output << (item * 10) }
       proc_pipeline.add_stage(:processor, :add_one) { |item, output| output << (item + 1) }
@@ -433,7 +433,7 @@ RSpec.describe Minigun::Pipeline do
       end.new
 
       # First PipelineStage producer
-      p1 = described_class.new(:pa, pipeline, config)
+      p1 = described_class.new(:pa, nil, pipeline, config)
       ps1 = Minigun::PipelineStage.new(:pipeline_a, pipeline, p1, nil, {})
       p1.add_stage(:producer, :gen) { |output| output << 10 }
       p1.add_stage(:processor, :double) { |item, output| output << (item * 2) }
@@ -442,7 +442,7 @@ RSpec.describe Minigun::Pipeline do
       pipeline.dag.add_node(ps1)  # Use Stage object
 
       # Second PipelineStage producer
-      p2 = described_class.new(:pb, pipeline, config)
+      p2 = described_class.new(:pb, nil, pipeline, config)
       ps2 = Minigun::PipelineStage.new(:pipeline_b, pipeline, p2, nil, {})
       p2.add_stage(:producer, :gen) { |output| output << 5 }
       p2.add_stage(:processor, :triple) { |item, output| output << (item * 3) }
