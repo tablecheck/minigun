@@ -29,14 +29,29 @@ module Minigun
   # Implements the Composite pattern where Pipeline is a composite Stage
   # Also handles loop-based stages (stages that manage their own input loop)
   class Stage
-    attr_reader :name, :options, :block
+    attr_reader :name, :options, :block, :pipeline
 
-    def initialize(name:, block: nil, options: {})
+    def initialize(*args, name: nil, block: nil, options: {}, **kwargs)
+      # Support both old (keyword) and new (positional) signatures
+      # New: Stage.new(pipeline, name, block, options)
+      # Old: Stage.new(name: :foo, block: proc {}, options: {})
+      if args.length > 0 && args[0].is_a?(Pipeline)
+        # New positional style: (pipeline, name, block, options)
+        @pipeline = args[0]
+        @name = args[1]
+        @block = args[2]
+        @options = args[3] || {}
+      else
+        # Old keyword style (backward compatible)
+        @pipeline = nil
+        @name = name
+        @block = block
+        @options = options
+      end
+
       # Auto-generate name if not provided (for unnamed stages)
       # Use "_" prefix + 8 char random hex
-      @name = name || :"_#{SecureRandom.hex(4)}"
-      @block = block
-      @options = options
+      @name = :"_#{SecureRandom.hex(4)}" if @name.nil?
     end
 
     # Get the queue size for this stage
@@ -261,10 +276,20 @@ module Minigun
   class AccumulatorStage < ConsumerStage
     attr_reader :max_size, :max_wait
 
-    def initialize(name:, block: nil, options: {})
-      super
-      @max_size = options[:max_size] || 100
-      @max_wait = options[:max_wait] || nil # Future: time-based batching
+    def initialize(*args, name: nil, block: nil, options: {}, **kwargs)
+      # Support both old and new signatures
+      if args.length > 0 && args[0].is_a?(Pipeline)
+        # New style: AccumulatorStage.new(pipeline, name, block, options)
+        super(args[0], args[1], args[2], args[3] || {})
+        opts = args[3] || {}
+      else
+        # Old style: AccumulatorStage.new(name: :foo, block: proc {}, options: {})
+        super(name: name, block: block, options: options)
+        opts = options
+      end
+
+      @max_size = opts[:max_size] || 100
+      @max_wait = opts[:max_wait] || nil # Future: time-based batching
       @buffer = []
       @mutex = Mutex.new
     end
@@ -338,9 +363,17 @@ module Minigun
   class RouterStage < Stage
     attr_accessor :targets
 
-    def initialize(name:, targets:)
-      super(name: name, options: {})
-      @targets = targets
+    def initialize(*args, name: nil, targets: nil, **kwargs)
+      # Support both old and new signatures
+      if args.length > 0 && args[0].is_a?(Pipeline)
+        # New style: RouterStage.new(pipeline, name, targets, options)
+        super(args[0], args[1], nil, args[3] || {})
+        @targets = args[2] || []
+      else
+        # Old style: RouterStage.new(name: :foo, targets: [...])
+        super(name: name, options: {})
+        @targets = targets || []
+      end
     end
 
     protected
@@ -405,16 +438,28 @@ module Minigun
 
   # Stage that wraps and executes a nested pipeline
   class PipelineStage < Stage
-    attr_reader :pipeline
+    attr_reader :nested_pipeline
 
-    def initialize(name:, options: {})
-      super
-      @pipeline = nil
+    def initialize(*args, name: nil, options: {}, **kwargs)
+      # Support both old and new signatures
+      if args.length > 0 && args[0].is_a?(Pipeline)
+        # New style: PipelineStage.new(pipeline, name, block, options)
+        super(args[0], args[1], nil, args[3] || options)
+      else
+        # Old style: PipelineStage.new(name: :foo, options: {})
+        super(name: name, options: options)
+      end
+      @nested_pipeline = nil
     end
 
-    # Inject the pipeline instance
+    # Backward compatibility: pipeline reader returns nested_pipeline
+    def pipeline
+      @nested_pipeline
+    end
+
+    # Inject the nested pipeline instance
     def pipeline=(pipeline)
-      @pipeline = pipeline
+      @nested_pipeline = pipeline
     end
 
     def run_mode
@@ -423,24 +468,24 @@ module Minigun
 
     # Run the nested pipeline when this stage is executed as a worker
     def run_stage(stage_ctx)
-      return unless @pipeline
+      return unless @nested_pipeline
 
       # Set up input/output queues for the nested pipeline
       # The pipeline will create :_entrance and :_exit stages based on these
       if stage_ctx.sources_expected.any?
         # Has upstream: set input queue so pipeline creates :_entrance
         # Also pass the expected source count for proper END signal handling
-        @pipeline.instance_variable_set(:@input_queues, {
+        @nested_pipeline.instance_variable_set(:@input_queues, {
           input: stage_ctx.input_queue,
           sources_expected: stage_ctx.sources_expected
         })
       end
 
       # Always set output queue so pipeline creates :_exit
-      @pipeline.instance_variable_set(:@output_queues, { output: create_output_queue(stage_ctx) })
+      @nested_pipeline.instance_variable_set(:@output_queues, { output: create_output_queue(stage_ctx) })
 
       # Run the nested pipeline (it will automatically create :_entrance/:_exit as needed)
-      @pipeline.run(stage_ctx.pipeline.context)
+      @nested_pipeline.run(stage_ctx.pipeline.context)
     ensure
       send_end_signals(stage_ctx)
     end
