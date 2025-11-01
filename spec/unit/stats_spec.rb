@@ -387,7 +387,7 @@ RSpec.describe Minigun::Stats do
       stats.finish!
 
       hash = stats.to_h
-      expect(hash[:stage_name]).to eq(:test_stage)
+      expect(hash[:stage_name]).to eq('test_stage')
       expect(hash[:runtime]).to be_a(Numeric)
       expect(hash[:items_produced]).to eq(10)
       expect(hash[:items_consumed]).to eq(5)

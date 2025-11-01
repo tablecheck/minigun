@@ -20,7 +20,8 @@ RSpec.describe 'Fork Executors - Jepsen-style Tests', skip: Gem.win_platform? do
            dag: dag,
            send: nil)
   end
-  let(:stage_stats) { Minigun::Stats.new('test_stage') }
+  let(:mock_stage) { double('Stage', name: 'test_stage') }
+  let(:stage_stats) { Minigun::Stats.new(mock_stage) }
   let(:stage_ctx) do
     Struct.new(:stage_stats, :pipeline).new(stage_stats, pipeline)
   end
