@@ -7,7 +7,8 @@ module Minigun
   StageContext = Struct.new(
     # Common to all stages
     :pipeline,
-    :stage_name,
+    :stage,        # Stage object reference (primary)
+    :stage_name,   # Stage name (for backward compat)
     :dag,
     :runtime_edges,
     :stage_input_queues,
@@ -130,7 +131,7 @@ module Minigun
     def create_input_queue(stage_ctx)
       InputQueue.new(
         stage_ctx.input_queue,
-        stage_ctx.stage_name,
+        stage_ctx.stage,  # Use stage object
         stage_ctx.sources_expected,
         stage_stats: stage_ctx.stage_stats
       )
@@ -138,27 +139,30 @@ module Minigun
 
     # Create wrapped output queue for this stage
     def create_output_queue(stage_ctx)
-      downstream = stage_ctx.dag.downstream(stage_ctx.stage_name)
+      # DAG and queues now use Stage objects
+      downstream = stage_ctx.dag.downstream(stage_ctx.stage)
       downstream_queues = downstream.filter_map { |ds| stage_ctx.stage_input_queues[ds] }
       OutputQueue.new(
-        stage_ctx.stage_name,
+        stage_ctx.stage,  # Use stage object
         downstream_queues,
         stage_ctx.stage_input_queues,
         stage_ctx.runtime_edges,
+        pipeline: stage_ctx.pipeline,  # Pass pipeline for name resolution
         stage_stats: stage_ctx.stage_stats
       )
     end
 
     # Consolidated end signal logic used by all stage types
     def send_end_signals(stage_ctx)
-      dag_downstream = stage_ctx.dag.downstream(stage_ctx.stage_name)
-      dynamic_targets = stage_ctx.runtime_edges[stage_ctx.stage_name].to_a
+      # DAG, runtime_edges, and queues now use Stage objects
+      dag_downstream = stage_ctx.dag.downstream(stage_ctx.stage)
+      dynamic_targets = stage_ctx.runtime_edges[stage_ctx.stage].to_a
       all_targets = (dag_downstream + dynamic_targets).uniq
 
       all_targets.each do |target|
         next unless stage_ctx.stage_input_queues[target]
 
-        stage_ctx.stage_input_queues[target] << EndOfSource.new(stage_ctx.stage_name)
+        stage_ctx.stage_input_queues[target] << EndOfSource.new(stage_ctx.stage)
       end
     end
 
@@ -207,7 +211,8 @@ module Minigun
     private
 
     def execute_hooks(ctx, type)
-      ctx.pipeline.execute_stage_hooks(type, ctx.stage_name)
+      # Hooks can be registered by name or object
+      ctx.pipeline.execute_stage_hooks(type, ctx.stage)
     end
   end
 
@@ -241,8 +246,8 @@ module Minigun
     end
 
     def run_stage(stage_ctx)
-      # Execute before hooks
-      stage_ctx.pipeline.send(:execute_stage_hooks, :before, stage_ctx.stage_name)
+      # Execute before hooks (use stage object)
+      stage_ctx.pipeline.send(:execute_stage_hooks, :before, stage_ctx.stage)
 
       # Create wrapped queues
       input_queue = create_input_queue(stage_ctx)
@@ -252,8 +257,8 @@ module Minigun
       context = stage_ctx.pipeline.context
       stage_ctx.executor.execute_stage(self, context, input_queue, output_queue)
 
-      # Execute after hooks
-      stage_ctx.pipeline.send(:execute_stage_hooks, :after, stage_ctx.stage_name)
+      # Execute after hooks (use stage object)
+      stage_ctx.pipeline.send(:execute_stage_hooks, :after, stage_ctx.stage)
 
       # Flush and cleanup
       flush_if_needed(stage_ctx, output_queue)
@@ -379,9 +384,9 @@ module Minigun
     protected
 
     def send_end_signals(worker_ctx)
-      # Broadcast EndOfSource to ALL router targets
+      # Broadcast EndOfSource to ALL router targets (targets are Stage objects)
       @targets.each do |target|
-        worker_ctx.stage_input_queues[target] << EndOfSource.new(worker_ctx.stage_name)
+        worker_ctx.stage_input_queues[target] << EndOfSource.new(worker_ctx.stage)
       end
     end
   end

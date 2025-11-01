@@ -72,12 +72,12 @@ module Minigun
 
       # Add the pipeline stage to the implicit pipeline
       @root_pipeline.stages << pipeline_stage
-      @root_pipeline.stage_order << name
-      @root_pipeline.dag.add_node(name)
+      @root_pipeline.stage_order << pipeline_stage  # Use object for stage_order
+      @root_pipeline.dag.add_node(pipeline_stage)
 
-      # Extract routing if specified
+      # Extract routing if specified (targets may be names - will be resolved later)
       to_targets = options[:to]
-      Array(to_targets).each { |target| @root_pipeline.dag.add_edge(name, target) } if to_targets
+      Array(to_targets).each { |target| @root_pipeline.dag.add_edge(pipeline_stage, target) } if to_targets
 
       pipeline_stage
     end
@@ -99,22 +99,22 @@ module Minigun
         pipeline_stage.pipeline = pipeline
 
         @root_pipeline.stages << pipeline_stage
-        @root_pipeline.stage_order << name
-        @root_pipeline.dag.add_node(name)
+        @root_pipeline.stage_order << pipeline_stage  # Use object for stage_order
+        @root_pipeline.dag.add_node(pipeline_stage)
       end
 
-      # Handle routing in root_pipeline DAG
+      # Handle routing in root_pipeline DAG (targets/sources may be names - will be resolved later)
       to_targets = options[:to]
       if to_targets
         Array(to_targets).each do |target|
-          @root_pipeline.dag.add_edge(name, target)
+          @root_pipeline.dag.add_edge(pipeline_stage, target)
         end
       end
 
       from_sources = options[:from]
       if from_sources
         Array(from_sources).each do |source|
-          @root_pipeline.dag.add_edge(source, name)
+          @root_pipeline.dag.add_edge(source, pipeline_stage)
         end
       end
 
