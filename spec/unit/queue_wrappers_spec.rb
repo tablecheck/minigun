@@ -4,18 +4,34 @@ require 'spec_helper'
 require 'minigun/queue_wrappers'
 
 RSpec.describe Minigun::OutputQueue do
-  let(:stage_name) { :test_stage }
+  # Create mock Stage objects
+  let(:test_stage) { double('test_stage', name: :test_stage) }
+  let(:stage_a) { double('stage_a', name: :stage_a) }
+  let(:stage_b) { double('stage_b', name: :stage_b) }
+  let(:stage_c) { double('stage_c', name: :stage_c) }
+
   let(:downstream_queues) { [Queue.new, Queue.new] }
-  let(:all_stage_queues) { { stage_a: Queue.new, stage_b: Queue.new, stage_c: Queue.new } }
+  let(:all_stage_queues) { { stage_a => Queue.new, stage_b => Queue.new, stage_c => Queue.new } }
   let(:runtime_edges) { Hash.new { |h, k| h[k] = Set.new } }
   let(:stage_stats) { double('stage_stats', increment_produced: nil) }
 
+  # Mock pipeline that can find stages by name
+  let(:pipeline) do
+    double('pipeline').tap do |p|
+      allow(p).to receive(:find_stage).with(:stage_a).and_return(stage_a)
+      allow(p).to receive(:find_stage).with(:stage_b).and_return(stage_b)
+      allow(p).to receive(:find_stage).with(:stage_c).and_return(stage_c)
+      allow(p).to receive(:find_stage).with(:unknown_stage).and_return(nil)
+    end
+  end
+
   let(:output_queue) do
     described_class.new(
-      stage_name,
+      test_stage,
       downstream_queues,
       all_stage_queues,
       runtime_edges,
+      pipeline: pipeline,
       stage_stats: stage_stats
     )
   end
@@ -57,7 +73,7 @@ RSpec.describe Minigun::OutputQueue do
     it 'tracks runtime edge' do
       output_queue.to(:stage_a)
 
-      expect(runtime_edges[stage_name]).to include(:stage_a)
+      expect(runtime_edges[test_stage]).to include(stage_a)
     end
 
     context 'memoization' do
@@ -96,12 +112,12 @@ RSpec.describe Minigun::OutputQueue do
         routed_queue << 42
 
         # Check that only stage_a received the item
-        expect(all_stage_queues[:stage_a].size).to eq(1)
-        expect(all_stage_queues[:stage_a].pop).to eq(42)
+        expect(all_stage_queues[stage_a].size).to eq(1)
+        expect(all_stage_queues[stage_a].pop).to eq(42)
 
         # Other stages should not have received it
-        expect(all_stage_queues[:stage_b].size).to eq(0)
-        expect(all_stage_queues[:stage_c].size).to eq(0)
+        expect(all_stage_queues[stage_b].size).to eq(0)
+        expect(all_stage_queues[stage_c].size).to eq(0)
       end
 
       it 'shares the same stats object' do
@@ -113,22 +129,22 @@ RSpec.describe Minigun::OutputQueue do
 
       it 'tracks runtime edges for END signal handling' do
         # Initially no runtime edges
-        expect(runtime_edges[stage_name]).to be_empty
+        expect(runtime_edges[test_stage]).to be_empty
 
         # Call .to() to create runtime edge
         output_queue.to(:stage_a)
 
         # Runtime edge should be tracked
-        expect(runtime_edges[stage_name]).to include(:stage_a)
+        expect(runtime_edges[test_stage]).to include(stage_a)
 
         # Multiple .to() calls to same stage don't duplicate
         output_queue.to(:stage_a)
-        expect(runtime_edges[stage_name].size).to eq(1)
+        expect(runtime_edges[test_stage].size).to eq(1)
 
         # Different targets are tracked separately
         output_queue.to(:stage_b)
-        expect(runtime_edges[stage_name]).to include(:stage_a, :stage_b)
-        expect(runtime_edges[stage_name].size).to eq(2)
+        expect(runtime_edges[test_stage]).to include(stage_a, stage_b)
+        expect(runtime_edges[test_stage].size).to eq(2)
       end
     end
   end
@@ -148,10 +164,11 @@ RSpec.describe Minigun::OutputQueue do
       time_without_cache = Benchmark.realtime do
         iterations.times do
           described_class.new(
-            stage_name,
-            [all_stage_queues[:stage_a]],
+            test_stage,
+            [all_stage_queues[stage_a]],
             all_stage_queues,
             runtime_edges,
+            pipeline: pipeline,
             stage_stats: stage_stats
           )
         end
@@ -184,11 +201,13 @@ end
 
 RSpec.describe Minigun::InputQueue do
   let(:raw_queue) { Queue.new }
-  let(:stage_name) { :test_stage }
-  let(:sources_expected) { Set.new(%i[source_a source_b]) }
+  let(:test_stage) { double('test_stage', name: :test_stage) }
+  let(:source_a) { double('source_a', name: :source_a) }
+  let(:source_b) { double('source_b', name: :source_b) }
+  let(:sources_expected) { Set.new([source_a, source_b]) }
 
   let(:input_queue) do
-    described_class.new(raw_queue, stage_name, sources_expected)
+    described_class.new(raw_queue, test_stage, sources_expected)
   end
 
   describe '#pop' do
@@ -202,14 +221,14 @@ RSpec.describe Minigun::InputQueue do
 
     it 'tracks EndOfSource signals from sources and returns EndOfStage' do
       # Add EndOfSource signals from all sources
-      raw_queue << Minigun::EndOfSource.new(:source_a)
-      raw_queue << Minigun::EndOfSource.new(:source_b)
+      raw_queue << Minigun::EndOfSource.new(source_a)
+      raw_queue << Minigun::EndOfSource.new(source_b)
 
       # First pop processes all EndOfSource signals and returns EndOfStage
       result = input_queue.pop
 
       expect(result).to be_a(Minigun::EndOfStage)
-      expect(result.stage_name).to eq(stage_name)
+      expect(result.stage).to eq(test_stage)
     end
 
     it 'returns EndOfStage when all sources are done' do
@@ -223,9 +242,9 @@ RSpec.describe Minigun::InputQueue do
 
     it 'handles mixed items and EndOfSource signals' do
       raw_queue << 1
-      raw_queue << Minigun::EndOfSource.new(:source_a)
+      raw_queue << Minigun::EndOfSource.new(source_a)
       raw_queue << 2
-      raw_queue << Minigun::EndOfSource.new(:source_b)
+      raw_queue << Minigun::EndOfSource.new(source_b)
 
       # Pop returns regular items, automatically consuming EndOfSource signals
       expect(input_queue.pop).to eq(1)

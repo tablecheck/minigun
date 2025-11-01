@@ -93,7 +93,7 @@ module Minigun
     def dup
       duped_stages = StagesCollection.new
       @stages.each { |stage| duped_stages << stage.dup }
-      
+
       Pipeline.new(
         @name,
         @config.dup,
@@ -182,7 +182,7 @@ module Minigun
     def reroute_stage(from_stage, to:)
       # Normalize from_stage to object
       from_obj = normalize_to_stage(from_stage)
-      
+
       # Remove existing outgoing edges from this stage
       old_targets = @dag.downstream(from_obj).dup
       old_targets.each do |target|
@@ -422,10 +422,10 @@ module Minigun
     def normalize_dag_to_objects!
       # Build a mapping of old identifiers (names/objects) to Stage objects
       replacements = {}
-      
+
       @dag.nodes.each do |node|
         next if node.is_a?(Stage)  # Already an object
-        
+
         # Find the stage object for this name
         stage = find_stage(node)
         if stage
