@@ -11,8 +11,6 @@ module Minigun
     RESERVOIR_SIZE = 1000
 
     def initialize(stage, is_terminal: false)
-      raise ArgumentError, "stage must respond to :name" unless stage.respond_to?(:name)
-
       @stage = stage
       @is_terminal = is_terminal
       @start_time = nil
@@ -210,8 +208,6 @@ module Minigun
 
     # Get or create stats for a stage
     def for_stage(stage, is_terminal: false)
-      raise ArgumentError, "stage must respond to :name" unless stage.respond_to?(:name)
-
       @stage_stats[stage] ||= Stats.new(stage, is_terminal: is_terminal)
     end
 
