@@ -107,7 +107,7 @@ module Minigun
     # Add a nested pipeline as a stage within the implicit pipeline
     def add_nested_pipeline(name, options = {}, &)
       # Create the actual Pipeline instance for this nested pipeline
-      nested_pipeline = Pipeline.new(name, @root_pipeline, @config)
+      nested_pipeline = Pipeline.new(name, self, @root_pipeline, @config)
 
       # Create a PipelineStage and configure it (pipeline-first positional style)
       pipeline_stage = PipelineStage.new(name, @root_pipeline, nested_pipeline, nil, options)
@@ -154,7 +154,7 @@ module Minigun
         pipeline = pipeline_stage.nested_pipeline
       else
         # Create new PipelineStage and add to root_pipeline (pipeline-first positional style)
-        pipeline = Pipeline.new(name, @root_pipeline, @config)
+        pipeline = Pipeline.new(name, self, @root_pipeline, @config)
         pipeline_stage = PipelineStage.new(name, @root_pipeline, pipeline, nil, options)
 
         @root_pipeline.stages << pipeline_stage

@@ -4,7 +4,8 @@ require 'spec_helper'
 
 RSpec.describe Minigun::Pipeline do
   let(:config) { { max_threads: 3, max_processes: 2 } }
-  let(:pipeline) { described_class.new(:test_pipeline, nil, config) }
+  let(:task) { instance_double(Minigun::Task, registry: nil) }
+  let(:pipeline) { described_class.new(:test_pipeline, task, nil, config) }
 
   describe '#initialize' do
     it 'creates a pipeline with a name' do
@@ -17,7 +18,7 @@ RSpec.describe Minigun::Pipeline do
     end
 
     it 'uses default config for missing options' do
-      default_pipeline = described_class.new(:default, nil)
+      default_pipeline = described_class.new(:default, nil, nil)
       expect(default_pipeline.config[:max_threads]).to eq(5)
     end
 

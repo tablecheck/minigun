@@ -9,7 +9,7 @@ RSpec.describe Minigun::PipelineStage do
 
   describe '#initialize' do
     it 'creates a PipelineStage with a nested pipeline' do
-      nested = Minigun::Pipeline.new(:nested, nil, config)
+      nested = Minigun::Pipeline.new(:nested, nil, nil, config)
       stage = described_class.new(:my_pipeline, mock_pipeline, nested, nil, {})
       expect(stage.name).to eq(:my_pipeline)
       expect(stage.nested_pipeline).to eq(nested)
@@ -18,7 +18,7 @@ RSpec.describe Minigun::PipelineStage do
 
   describe '#run_mode' do
     it 'returns :composite' do
-      nested = Minigun::Pipeline.new(:nested, nil, config)
+      nested = Minigun::Pipeline.new(:nested, nil, nil, config)
       stage = described_class.new(:my_pipeline, mock_pipeline, nested, nil, {})
       expect(stage.run_mode).to eq(:composite)
     end
