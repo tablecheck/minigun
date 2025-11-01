@@ -32,7 +32,7 @@ RSpec.describe 'Fork Executors - Jepsen-style Tests', skip: Gem.win_platform? do
 
     # Create a mock pipeline for stage construction
     mock_pipeline = instance_double(Minigun::Pipeline, name: 'test_pipeline')
-    
+
     # Create real ConsumerStage with a block that processes (item, output)
     # RSpec mocks don't work across forks, so we need real objects
     # ConsumerStage#execute handles the input loop and calls block per item

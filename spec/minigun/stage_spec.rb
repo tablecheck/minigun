@@ -4,7 +4,7 @@ require 'spec_helper'
 
 RSpec.describe Minigun::Stage do
   let(:mock_pipeline) { instance_double(Minigun::Pipeline, name: 'test_pipeline') }
-  
+
   describe 'base class' do
     it 'returns nil when execute is called without a block' do
       stage = described_class.new(mock_pipeline, :test, nil, {})
@@ -29,7 +29,7 @@ end
 
 RSpec.describe Minigun::ProducerStage do
   let(:mock_pipeline) { instance_double(Minigun::Pipeline, name: 'test_pipeline') }
-  
+
   describe 'producer behavior' do
     let(:stage) { described_class.new(mock_pipeline, :test, proc { |output| }, {}) }
 
@@ -56,7 +56,7 @@ end
 
 RSpec.describe Minigun::ConsumerStage do
   let(:mock_pipeline) { instance_double(Minigun::Pipeline, name: 'test_pipeline') }
-  
+
   describe 'processor behavior' do
     let(:stage) { described_class.new(mock_pipeline, :test, proc { |_x, _output| }, {}) }
 
@@ -111,7 +111,7 @@ end
 
 RSpec.describe Minigun::AccumulatorStage do
   let(:mock_pipeline) { instance_double(Minigun::Pipeline, name: 'test_pipeline') }
-  
+
   it 'is a special batching stage' do
     stage = described_class.new(mock_pipeline, :test, proc {}, {})
     expect(stage.max_size).to eq(100) # default

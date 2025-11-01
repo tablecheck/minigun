@@ -284,7 +284,7 @@ module Minigun
     # Positional constructor: AccumulatorStage.new(pipeline, name, block, options)
     def initialize(pipeline, name, block, options = {})
       super(pipeline, name, block, options)
-      
+
       @max_size = options[:max_size] || 100
       @max_wait = options[:max_wait] || nil # Future: time-based batching
       @buffer = []

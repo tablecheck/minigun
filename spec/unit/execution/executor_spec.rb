@@ -4,7 +4,7 @@ require 'spec_helper'
 
 RSpec.describe Minigun::Execution::Executor do
   let(:mock_pipeline) { instance_double(Minigun::Pipeline, name: 'test_pipeline') }
-  
+
   # Helper to create a mock stage_ctx
   let(:mock_stage_ctx) do
     dag = double('dag', terminal?: false)
@@ -412,6 +412,7 @@ RSpec.describe Minigun::Execution::CowForkPoolExecutor, skip: Gem.win_platform? 
   end
 
   describe '#execute_stage' do
+    let(:mock_pipeline) { instance_double(Minigun::Pipeline, name: 'test_pipeline') }
     let(:stage_stats) { Minigun::Stats.new(:test) }
     let(:user_context) { {} }
 
@@ -509,6 +510,7 @@ RSpec.describe Minigun::Execution::IpcForkPoolExecutor, skip: Gem.win_platform? 
   end
 
   describe '#execute_stage' do
+    let(:mock_pipeline) { instance_double(Minigun::Pipeline, name: 'test_pipeline') }
     let(:stage_stats) { Minigun::Stats.new(:test) }
     let(:user_context) { {} }
 
