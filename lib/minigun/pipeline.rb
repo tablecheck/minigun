@@ -48,6 +48,7 @@ module Minigun
       }
 
       @stages = stages || StagesCollection.new # Array of Stage objects with hash-like access
+      @deferred_edges = [] # Store edges with forward references: [{from: stage, to: :name}, ...]
 
       # Pipeline-level hooks (run once per pipeline)
       @hooks = hooks || {
@@ -76,17 +77,6 @@ module Minigun
     def find_stage(name_or_obj)
       return name_or_obj if name_or_obj.is_a?(Stage)
       @stages.find { |stage| stage.name == name_or_obj }
-    end
-
-    # Normalize stage identifier to object (for DAG operations)
-    # Converts names to Stage objects, passes through Stage objects unchanged
-    def normalize_to_stage(identifier)
-      return identifier if identifier.is_a?(Stage)
-      stage = find_stage(identifier)
-      unless stage
-        raise Minigun::Error, "[Pipeline:#{@name}] Cannot resolve stage reference: #{identifier.inspect}"
-      end
-      stage
     end
 
     # Duplicate this pipeline for inheritance
@@ -172,16 +162,59 @@ module Minigun
       @stage_order << stage
       @dag.add_node(stage)
 
-      # Add routing edges using stage object as source
-      # Targets might be forward references (names), convert to objects when resolving
-      Array(to_targets).each { |target| @dag.add_edge(stage, target) } if to_targets
-      Array(from_sources).each { |source| @dag.add_edge(source, stage) } if from_sources
+      # Add routing edges - resolve names to Stage objects immediately
+      if to_targets
+        Array(to_targets).each do |target|
+          target_stage = target.is_a?(Stage) ? target : find_stage(target)
+          if target_stage
+            @dag.add_edge(stage, target_stage)
+          else
+            # Forward reference - defer until target is created
+            @deferred_edges << { from: stage, to: target }
+          end
+        end
+      end
+
+      if from_sources
+        Array(from_sources).each do |source|
+          source_stage = source.is_a?(Stage) ? source : find_stage(source)
+          if source_stage
+            @dag.add_edge(source_stage, stage)
+          else
+            # Forward reference - defer until source is created
+            @deferred_edges << { from: source, to: stage }
+          end
+        end
+      end
+
+      # Process any deferred edges that now have both endpoints
+      process_deferred_edges!
+    end
+
+    # Process deferred edges - add them to DAG once both endpoints exist
+    def process_deferred_edges!
+      resolved = []
+      @deferred_edges.each do |edge|
+        from_stage = edge[:from].is_a?(Stage) ? edge[:from] : find_stage(edge[:from])
+        to_stage = edge[:to].is_a?(Stage) ? edge[:to] : find_stage(edge[:to])
+
+        if from_stage && to_stage
+          @dag.add_edge(from_stage, to_stage)
+          resolved << edge
+        end
+      end
+
+      # Remove resolved edges
+      @deferred_edges -= resolved
     end
 
     # Reroute stages by modifying the DAG
+    # from_stage: Stage object or name
+    # to: Stage object(s) or name(s)
     def reroute_stage(from_stage, to:)
-      # Normalize from_stage to object
-      from_obj = normalize_to_stage(from_stage)
+      # Resolve from_stage to object
+      from_obj = from_stage.is_a?(Stage) ? from_stage : find_stage(from_stage)
+      raise Minigun::Error, "[Pipeline:#{@name}] Cannot find stage: #{from_stage}" unless from_obj
 
       # Remove existing outgoing edges from this stage
       old_targets = @dag.downstream(from_obj).dup
@@ -190,9 +223,10 @@ module Minigun
         @dag.reverse_edges[target].delete(from_obj)
       end
 
-      # Add new edges (normalize targets to objects)
+      # Add new edges (resolve targets to objects)
       Array(to).each do |target|
-        target_obj = normalize_to_stage(target)
+        target_obj = target.is_a?(Stage) ? target : find_stage(target)
+        raise Minigun::Error, "[Pipeline:#{@name}] Cannot find stage: #{target}" unless target_obj
         @dag.add_edge(from_obj, target_obj)
       end
     end
@@ -361,13 +395,13 @@ module Minigun
       end
     end
 
-    def terminal_stage?(stage_or_name)
-      stage = normalize_to_stage(stage_or_name)
+    # stage: Stage object only (no name lookup)
+    def terminal_stage?(stage)
       @dag.terminal?(stage)
     end
 
-    def get_targets(stage_or_name)
-      stage = normalize_to_stage(stage_or_name)
+    # stage: Stage object only (no name lookup)
+    def get_targets(stage)
       targets = @dag.downstream(stage)
 
       # If no targets and we have output queues, this is an output stage
@@ -395,9 +429,14 @@ module Minigun
     private
 
     def build_dag_routing!
-      # FIRST: Normalize DAG to use object references instead of names
-      # This resolves any forward references from routing declarations
-      normalize_dag_to_objects!
+      # Finalize any remaining deferred edges
+      process_deferred_edges!
+
+      # Check for unresolved forward references
+      unless @deferred_edges.empty?
+        unresolved = @deferred_edges.map { |e| "#{e[:from]} -> #{e[:to]}" }.join(", ")
+        raise Minigun::Error, "[Pipeline:#{@name}] Unresolved routing references: #{unresolved}"
+      end
 
       # Handle multiple producers specially - they should all connect to first non-producer
       handle_multiple_producers_routing!
@@ -417,51 +456,6 @@ module Minigun
       log_debug "#{log_prefix} DAG: #{@dag.topological_sort.map(&:name).join(' -> ')}"
     end
 
-    # Normalize all DAG nodes and edges to use Stage objects instead of names
-    # Resolves forward references where names were used in routing before stages existed
-    def normalize_dag_to_objects!
-      # Build a mapping of old identifiers (names/objects) to Stage objects
-      replacements = {}
-
-      @dag.nodes.each do |node|
-        next if node.is_a?(Stage)  # Already an object
-
-        # Find the stage object for this name
-        stage = find_stage(node)
-        if stage
-          replacements[node] = stage
-        else
-          # This will be caught later in validate_stages_exist!
-          # For now, keep the name as-is
-        end
-      end
-
-      # Replace nodes (remove duplicates that arise from multiple references to same stage)
-      @dag.nodes.map! { |node| replacements[node] || node }
-      @dag.nodes.uniq!
-
-      # Replace edges (remove duplicates)
-      new_edges = Hash.new { |h, k| h[k] = [] }
-      @dag.edges.each do |from, to_array|
-        new_from = replacements[from] || from
-        new_to_array = to_array.map { |to| replacements[to] || normalize_to_stage(to) }.uniq
-        new_edges[new_from] = new_to_array
-      end
-      @dag.instance_variable_set(:@edges, new_edges)
-
-      # Replace reverse_edges (remove duplicates)
-      new_reverse = Hash.new { |h, k| h[k] = [] }
-      @dag.reverse_edges.each do |to, from_array|
-        new_to = replacements[to] || to
-        new_from_array = from_array.map { |from| replacements[from] || normalize_to_stage(from) }.uniq
-        new_reverse[new_to] = new_from_array
-      end
-      @dag.instance_variable_set(:@reverse_edges, new_reverse)
-
-      # Normalize stage_order to objects (remove duplicates)
-      @stage_order.map! { |s| s.is_a?(Stage) ? s : normalize_to_stage(s) }
-      @stage_order.uniq!
-    end
 
     def validate_stages_exist!
       @dag.nodes.each do |node|
