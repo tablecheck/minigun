@@ -11,7 +11,7 @@ RSpec.describe Minigun::PipelineStage do
     it 'creates a PipelineStage without a pipeline initially' do
       stage = described_class.new(mock_pipeline, :my_pipeline, nil, {})
       expect(stage.name).to eq(:my_pipeline)
-      expect(stage.pipeline).to be_nil
+      expect(stage.nested_pipeline).to be_nil
     end
   end
 
@@ -22,24 +22,24 @@ RSpec.describe Minigun::PipelineStage do
     end
   end
 
-  describe '#pipeline=' do
-    it 'sets the pipeline' do
+  describe '#nested_pipeline=' do
+    it 'sets the nested pipeline' do
       stage = described_class.new(mock_pipeline, :my_pipeline, nil, {})
       pipeline = Minigun::Pipeline.new(nil, :test, config)
 
-      stage.pipeline = pipeline
+      stage.nested_pipeline = pipeline
 
-      expect(stage.pipeline).to eq(pipeline)
+      expect(stage.nested_pipeline).to eq(pipeline)
     end
 
-    it 'allows setting pipeline to nil' do
+    it 'allows setting nested pipeline to nil' do
       stage = described_class.new(mock_pipeline, :my_pipeline, nil, {})
       pipeline = Minigun::Pipeline.new(nil, :test, config)
-      stage.pipeline = pipeline
+      stage.nested_pipeline = pipeline
 
-      stage.pipeline = nil
+      stage.nested_pipeline = nil
 
-      expect(stage.pipeline).to be_nil
+      expect(stage.nested_pipeline).to be_nil
     end
   end
 
@@ -65,7 +65,7 @@ RSpec.describe Minigun::PipelineStage do
       context = Object.new
       root_pipeline_mock = instance_double(Minigun::Pipeline, context: context)
       pipeline = instance_double(Minigun::Pipeline, context: context)
-      stage.pipeline = pipeline
+      stage.nested_pipeline = pipeline
 
       stage_ctx = instance_double(Minigun::StageContext,
                                   pipeline: pipeline,
@@ -92,7 +92,7 @@ RSpec.describe Minigun::PipelineStage do
       stage = described_class.new(mock_pipeline, :my_pipeline, nil, {})
       context = Object.new
       pipeline = instance_double(Minigun::Pipeline, context: context)
-      stage.pipeline = pipeline
+      stage.nested_pipeline = pipeline
 
       input_queue = Queue.new
       sources = Set.new([:upstream])
@@ -125,7 +125,7 @@ RSpec.describe Minigun::PipelineStage do
       stage = described_class.new(mock_pipeline, :my_pipeline, nil, {})
       context = Object.new
       pipeline = instance_double(Minigun::Pipeline, context: context)
-      stage.pipeline = pipeline
+      stage.nested_pipeline = pipeline
 
       output_queue = Queue.new
       stage_ctx = instance_double(Minigun::StageContext,
@@ -153,7 +153,7 @@ RSpec.describe Minigun::PipelineStage do
       stage = described_class.new(mock_pipeline, :my_pipeline, nil, {})
       context = Object.new
       pipeline = instance_double(Minigun::Pipeline, context: context)
-      stage.pipeline = pipeline
+      stage.nested_pipeline = pipeline
 
       stage_ctx = instance_double(Minigun::StageContext,
                                   pipeline: pipeline,
@@ -180,7 +180,7 @@ RSpec.describe Minigun::PipelineStage do
       stage = described_class.new(mock_pipeline, :my_pipeline, nil, {})
       context = Object.new
       pipeline = instance_double(Minigun::Pipeline, context: context)
-      stage.pipeline = pipeline
+      stage.nested_pipeline = pipeline
 
       stage_ctx = instance_double(Minigun::StageContext,
                                   pipeline: pipeline,
