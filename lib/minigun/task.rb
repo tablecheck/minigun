@@ -37,7 +37,7 @@ module Minigun
     # Get all named pipelines (composite stages in root_pipeline)
     def pipelines
       @root_pipeline.stages.select { |stage| stage.run_mode == :composite }
-                    .to_h { |stage| [stage.name, stage.pipeline] }
+                    .to_h { |stage| [stage.name, stage.nested_pipeline] }
     end
 
     # Get the DAG for pipeline-level routing
@@ -62,7 +62,7 @@ module Minigun
 
       # Create the actual Pipeline instance for this nested pipeline
       nested_pipeline = Pipeline.new(@root_pipeline, name, @config)
-      pipeline_stage.pipeline = nested_pipeline
+      pipeline_stage.nested_pipeline = nested_pipeline
 
       # Add stages to the nested pipeline via block
       if block_given?
@@ -104,12 +104,12 @@ module Minigun
       if pipeline_stage
         raise Minigun::Error, "Stage #{name} already exists as a non-composite stage" unless pipeline_stage.run_mode == :composite
 
-        pipeline = pipeline_stage.pipeline
+        pipeline = pipeline_stage.nested_pipeline
       else
         # Create new PipelineStage and add to root_pipeline (pipeline-first positional style)
         pipeline_stage = PipelineStage.new(@root_pipeline, name, nil, options)
         pipeline = Pipeline.new(@root_pipeline, name, @config)
-        pipeline_stage.pipeline = pipeline
+        pipeline_stage.nested_pipeline = pipeline
 
         @root_pipeline.stages << pipeline_stage
         @root_pipeline.stage_order << pipeline_stage  # Use object for stage_order

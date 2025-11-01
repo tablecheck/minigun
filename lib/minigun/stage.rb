@@ -464,13 +464,8 @@ module Minigun
       @nested_pipeline = nil
     end
 
-    # REMOVE_THIS - Backward compatibility: pipeline reader returns nested_pipeline
-    def pipeline
-      @nested_pipeline
-    end
-
     # Inject the nested pipeline instance
-    def pipeline=(pipeline)
+    def nested_pipeline=(pipeline)
       @nested_pipeline = pipeline
     end
 
