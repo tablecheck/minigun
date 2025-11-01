@@ -120,17 +120,34 @@ module Minigun
         opts = entry[:options]
 
         if name
-          # Named pipeline - define on instance task, then evaluate block in PipelineDSL context
+          # Named pipeline - define on instance task, then evaluate block with instance context
           @_minigun_task.define_pipeline(name, opts) do |pipeline|
             pipeline_dsl = PipelineDSL.new(pipeline, self)
-            pipeline_dsl.instance_eval(&entry[:block])
+            _pipeline_dsl_stack.push(pipeline_dsl)
+            begin
+              # Evaluate in instance context so @config, @results etc. are accessible
+              instance_eval(&entry[:block])
+            ensure
+              _pipeline_dsl_stack.pop
+            end
           end
         else
-          # Unnamed pipeline - evaluate in PipelineDSL context on root pipeline
+          # Unnamed pipeline - evaluate with instance context on root pipeline
           pipeline_dsl = PipelineDSL.new(@_minigun_task.root_pipeline, self)
-          pipeline_dsl.instance_eval(&entry[:block])
+          _pipeline_dsl_stack.push(pipeline_dsl)
+          begin
+            # Evaluate in instance context so @config, @results etc. are accessible
+            instance_eval(&entry[:block])
+          ensure
+            _pipeline_dsl_stack.pop
+          end
         end
       end
+    end
+
+    # Pipeline DSL delegation stack - allows nested pipelines to delegate correctly
+    def _pipeline_dsl_stack
+      @_pipeline_dsl_stack ||= []
     end
 
     # Context management for PipelineDSL when @context is set
@@ -140,6 +157,25 @@ module Minigun
 
     def _named_contexts
       @_named_contexts ||= {}
+    end
+
+    # Delegate DSL method calls through the pipeline_dsl stack
+    # Checks each level from top to bottom until method is found
+    def method_missing(method_name, *args, **kwargs, &block)
+      stack = _pipeline_dsl_stack
+      stack.reverse_each do |dsl|
+        if dsl.respond_to?(method_name, true)
+          return dsl.send(method_name, *args, **kwargs, &block)
+        end
+      end
+      super
+    end
+
+    def respond_to_missing?(method_name, include_private = false)
+      _pipeline_dsl_stack.reverse_each do |dsl|
+        return true if dsl.respond_to?(method_name, include_private)
+      end
+      super
     end
 
     # DSL context for defining stages within a named pipeline
@@ -309,10 +345,16 @@ module Minigun
 
       private
 
-      def _with_execution_context(context, &)
+      def _with_execution_context(context, &block)
         _execution_context_stack.push(context)
         begin
-          instance_eval(&)
+          if @context
+            # Evaluate in user's instance context to allow access to @config, @results, etc.
+            @context.instance_eval(&block)
+          else
+            # No context - evaluate in PipelineDSL context
+            instance_eval(&block)
+          end
         ensure
           _execution_context_stack.pop
         end
