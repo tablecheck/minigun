@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'securerandom'
+
 module Minigun
   # Unified context for all stage execution (producers and workers)
   StageContext = Struct.new(
@@ -30,7 +32,9 @@ module Minigun
     attr_reader :name, :options, :block
 
     def initialize(name:, block: nil, options: {})
-      @name = name
+      # Auto-generate name if not provided (for unnamed stages)
+      # Use "_" prefix + 8 char random hex
+      @name = name || :"_#{SecureRandom.hex(4)}"
       @block = block
       @options = options
     end
