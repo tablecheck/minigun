@@ -46,6 +46,7 @@ RSpec.describe Minigun::PipelineStage do
       stage = described_class.new(name: :my_pipeline)
       stage_ctx = instance_double(Minigun::StageContext,
                                   pipeline: instance_double(Minigun::Pipeline, context: Object.new),
+                                  stage: stage,
                                   sources_expected: Set.new,
                                   input_queue: Queue.new,
                                   dag: instance_double(Minigun::DAG, downstream: []),

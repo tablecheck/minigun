@@ -62,9 +62,10 @@ module Minigun
         log_debug 'No upstream sources, sending END signals and exiting'
 
         # Send EndOfSource to all downstream stages so they don't deadlock
-        downstream = stage_ctx.dag.downstream(stage_ctx.stage_name)
+        # DAG and queues now use Stage objects
+        downstream = stage_ctx.dag.downstream(stage_ctx.stage)
         downstream.each do |target|
-          stage_ctx.stage_input_queues[target] << EndOfSource.new(stage_ctx.stage_name)
+          stage_ctx.stage_input_queues[target] << EndOfSource.new(stage_ctx.stage)
         end
 
         log_debug 'Done'
@@ -79,29 +80,32 @@ module Minigun
       stage_input_queues = @pipeline.stage_input_queues
 
       # Calculate sources for workers (empty for autonomous stages)
+      # DAG now uses Stage objects instead of names
       sources_expected = if @stage.run_mode == :autonomous
                            Set.new
-                         elsif @stage_name == :_entrance && @pipeline.input_queues
+                         elsif @stage.name == :_entrance && @pipeline.input_queues # REMOVE_THIS -- no logic based on stage name
                            # For :_entrance, use sources from parent pipeline if available
                            @pipeline.input_queues[:sources_expected] || Set.new
                          else
-                           Set.new(dag.upstream(@stage_name))
+                           Set.new(dag.upstream(@stage))
                          end
 
       # Create stats object for this specific stage
-      is_terminal = dag.terminal?(@stage_name)
-      stage_stats = @pipeline.stats.for_stage(@stage_name, is_terminal: is_terminal)
+      # DAG now uses Stage objects
+      is_terminal = dag.terminal?(@stage)
+      stage_stats = @pipeline.stats.for_stage(@stage, is_terminal: is_terminal)
 
       StageContext.new(
         worker: self,
         pipeline: @pipeline,
-        stage_name: @stage_name,
+        stage: @stage,
+        stage_name: @stage_name,   # Keep for backward compat # REMOVE_THIS
         dag: dag,
         runtime_edges: @pipeline.runtime_edges,
         stage_input_queues: stage_input_queues,
         stage_stats: stage_stats,
         # Worker-specific (nil/empty for producers)
-        input_queue: stage_input_queues[@stage_name],
+        input_queue: stage_input_queues[@stage],
         sources_expected: sources_expected,
         sources_done: Set.new
       )

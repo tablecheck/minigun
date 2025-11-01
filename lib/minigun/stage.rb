@@ -1,11 +1,14 @@
 # frozen_string_literal: true
 
+require 'securerandom'
+
 module Minigun
   # Unified context for all stage execution (producers and workers)
   StageContext = Struct.new(
     # Common to all stages
     :pipeline,
-    :stage_name,
+    :stage,
+    :stage_name, # REMOVE_THIS -- if needed, use stage.name, but prefer doing references by stage
     :dag,
     :runtime_edges,
     :stage_input_queues,
@@ -27,12 +30,30 @@ module Minigun
   # Implements the Composite pattern where Pipeline is a composite Stage
   # Also handles loop-based stages (stages that manage their own input loop)
   class Stage
-    attr_reader :name, :options, :block
+    attr_reader :name, :options, :block, :pipeline
 
-    def initialize(name:, block: nil, options: {})
-      @name = name
-      @block = block
-      @options = options
+    def initialize(*args, name: nil, block: nil, options: {}, **kwargs)
+      # Support both old (keyword) and new (positional) signatures
+      # New: Stage.new(pipeline, name, block, options)
+      # Old: Stage.new(name: :foo, block: proc {}, options: {})
+      if args.length > 0 && args[0].is_a?(Pipeline)
+        # New positional style: (pipeline, name, block, options)
+        @pipeline = args[0]
+        @name = args[1]
+        @block = args[2]
+        @options = args[3] || {}
+      else # REMOVE_THIS
+        # Old keyword style (backward compatible)
+        @pipeline = nil
+        @name = name
+        @block = block
+        @options = options
+      end
+
+      # Auto-generate name if not provided (for unnamed stages)
+      # Use "_" prefix + 8 char random hex
+      # TODO: Convert to base62
+      @name = :"_#{SecureRandom.hex(4)}" if @name.nil?
     end
 
     # Get the queue size for this stage
@@ -111,7 +132,7 @@ module Minigun
     def create_input_queue(stage_ctx)
       InputQueue.new(
         stage_ctx.input_queue,
-        stage_ctx.stage_name,
+        stage_ctx.stage,
         stage_ctx.sources_expected,
         stage_stats: stage_ctx.stage_stats
       )
@@ -119,27 +140,29 @@ module Minigun
 
     # Create wrapped output queue for this stage
     def create_output_queue(stage_ctx)
-      downstream = stage_ctx.dag.downstream(stage_ctx.stage_name)
+      # DAG and queues now use Stage objects
+      downstream = stage_ctx.dag.downstream(stage_ctx.stage)
       downstream_queues = downstream.filter_map { |ds| stage_ctx.stage_input_queues[ds] }
       OutputQueue.new(
-        stage_ctx.stage_name,
+        stage_ctx.stage,
         downstream_queues,
         stage_ctx.stage_input_queues,
         stage_ctx.runtime_edges,
+        pipeline: stage_ctx.pipeline, # REMOVE_THIS
         stage_stats: stage_ctx.stage_stats
       )
     end
 
     # Consolidated end signal logic used by all stage types
     def send_end_signals(stage_ctx)
-      dag_downstream = stage_ctx.dag.downstream(stage_ctx.stage_name)
-      dynamic_targets = stage_ctx.runtime_edges[stage_ctx.stage_name].to_a
+      dag_downstream = stage_ctx.dag.downstream(stage_ctx.stage)
+      dynamic_targets = stage_ctx.runtime_edges[stage_ctx.stage].to_a
       all_targets = (dag_downstream + dynamic_targets).uniq
 
       all_targets.each do |target|
         next unless stage_ctx.stage_input_queues[target]
 
-        stage_ctx.stage_input_queues[target] << EndOfSource.new(stage_ctx.stage_name)
+        stage_ctx.stage_input_queues[target] << EndOfSource.new(stage_ctx.stage)
       end
     end
 
@@ -188,7 +211,7 @@ module Minigun
     private
 
     def execute_hooks(ctx, type)
-      ctx.pipeline.execute_stage_hooks(type, ctx.stage_name)
+      ctx.pipeline.execute_stage_hooks(type, ctx.stage)
     end
   end
 
@@ -223,7 +246,7 @@ module Minigun
 
     def run_stage(stage_ctx)
       # Execute before hooks
-      stage_ctx.pipeline.send(:execute_stage_hooks, :before, stage_ctx.stage_name)
+      stage_ctx.pipeline.send(:execute_stage_hooks, :before, stage_ctx.stage)
 
       # Create wrapped queues
       input_queue = create_input_queue(stage_ctx)
@@ -234,7 +257,7 @@ module Minigun
       stage_ctx.executor.execute_stage(self, context, input_queue, output_queue)
 
       # Execute after hooks
-      stage_ctx.pipeline.send(:execute_stage_hooks, :after, stage_ctx.stage_name)
+      stage_ctx.pipeline.send(:execute_stage_hooks, :after, stage_ctx.stage)
 
       # Flush and cleanup
       flush_if_needed(stage_ctx, output_queue)
@@ -257,10 +280,20 @@ module Minigun
   class AccumulatorStage < ConsumerStage
     attr_reader :max_size, :max_wait
 
-    def initialize(name:, block: nil, options: {})
-      super
-      @max_size = options[:max_size] || 100
-      @max_wait = options[:max_wait] || nil # Future: time-based batching
+    def initialize(*args, name: nil, block: nil, options: {}, **kwargs)
+      # Support both old and new signatures
+      if args.length > 0 && args[0].is_a?(Pipeline)
+        # New style: AccumulatorStage.new(pipeline, name, block, options)
+        super(args[0], args[1], args[2], args[3] || {})
+        opts = args[3] || {}
+      else # REMOVE_THIS
+        # Old style: AccumulatorStage.new(name: :foo, block: proc {}, options: {})
+        super(name: name, block: block, options: options)
+        opts = options
+      end
+
+      @max_size = opts[:max_size] || 100
+      @max_wait = opts[:max_wait] || nil # Future: time-based batching
       @buffer = []
       @mutex = Mutex.new
     end
@@ -334,9 +367,17 @@ module Minigun
   class RouterStage < Stage
     attr_accessor :targets
 
-    def initialize(name:, targets:)
-      super(name: name, options: {})
-      @targets = targets
+    def initialize(*args, name: nil, targets: nil, **kwargs)
+      # Support both old and new signatures
+      if args.length > 0 && args[0].is_a?(Pipeline)
+        # New style: RouterStage.new(pipeline, name, targets, options)
+        super(args[0], args[1], nil, args[3] || {})
+        @targets = args[2] || []
+      else # REMOVE_THIS
+        # Old style: RouterStage.new(name: :foo, targets: [...])
+        super(name: name, options: {})
+        @targets = targets || []
+      end
     end
 
     protected
@@ -344,7 +385,7 @@ module Minigun
     def send_end_signals(worker_ctx)
       # Broadcast EndOfSource to ALL router targets
       @targets.each do |target|
-        worker_ctx.stage_input_queues[target] << EndOfSource.new(worker_ctx.stage_name)
+        worker_ctx.stage_input_queues[target] << EndOfSource.new(worker_ctx.stage)
       end
     end
   end
@@ -401,16 +442,28 @@ module Minigun
 
   # Stage that wraps and executes a nested pipeline
   class PipelineStage < Stage
-    attr_reader :pipeline
+    attr_reader :nested_pipeline
 
-    def initialize(name:, options: {})
-      super
-      @pipeline = nil
+    def initialize(*args, name: nil, options: {}, **kwargs)
+      # Support both old and new signatures
+      if args.length > 0 && args[0].is_a?(Pipeline)
+        # New style: PipelineStage.new(pipeline, name, block, options)
+        super(args[0], args[1], nil, args[3] || options)
+      else # REMOVE_THIS
+        # Old style: PipelineStage.new(name: :foo, options: {})
+        super(name: name, options: options)
+      end
+      @nested_pipeline = nil
     end
 
-    # Inject the pipeline instance
+    # REMOVE_THIS - Backward compatibility: pipeline reader returns nested_pipeline
+    def pipeline
+      @nested_pipeline
+    end
+
+    # Inject the nested pipeline instance
     def pipeline=(pipeline)
-      @pipeline = pipeline
+      @nested_pipeline = pipeline
     end
 
     def run_mode
@@ -419,24 +472,24 @@ module Minigun
 
     # Run the nested pipeline when this stage is executed as a worker
     def run_stage(stage_ctx)
-      return unless @pipeline
+      return unless @nested_pipeline
 
       # Set up input/output queues for the nested pipeline
       # The pipeline will create :_entrance and :_exit stages based on these
       if stage_ctx.sources_expected.any?
         # Has upstream: set input queue so pipeline creates :_entrance
         # Also pass the expected source count for proper END signal handling
-        @pipeline.instance_variable_set(:@input_queues, {
+        @nested_pipeline.instance_variable_set(:@input_queues, {
           input: stage_ctx.input_queue,
           sources_expected: stage_ctx.sources_expected
         })
       end
 
       # Always set output queue so pipeline creates :_exit
-      @pipeline.instance_variable_set(:@output_queues, { output: create_output_queue(stage_ctx) })
+      @nested_pipeline.instance_variable_set(:@output_queues, { output: create_output_queue(stage_ctx) })
 
       # Run the nested pipeline (it will automatically create :_entrance/:_exit as needed)
-      @pipeline.run(stage_ctx.pipeline.context)
+      @nested_pipeline.run(stage_ctx.pipeline.context)
     ensure
       send_end_signals(stage_ctx)
     end

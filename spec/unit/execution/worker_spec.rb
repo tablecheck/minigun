@@ -191,10 +191,18 @@ RSpec.describe Minigun::Worker do
   end
 
   describe 'router stage' do
+    # Create mock stage objects
     let(:router_stage) do
+      Minigun::ConsumerStage.new(name: :router, block: proc {}, options: {})
+    end
+    let(:target_a_stage) { Minigun::ConsumerStage.new(name: :target_a, block: proc {}, options: {}) }
+    let(:target_b_stage) { Minigun::ConsumerStage.new(name: :target_b, block: proc {}, options: {}) }
+    let(:source_stage) { Minigun::ProducerStage.new(name: :source, block: proc {}, options: {}) }
+
+    let(:broadcast_router) do
       Minigun::RouterBroadcastStage.new(
         name: :router,
-        targets: %i[target_a target_b]
+        targets: [target_a_stage, target_b_stage]  # Use Stage objects
       )
     end
 
@@ -204,15 +212,15 @@ RSpec.describe Minigun::Worker do
       target_b_queue = Queue.new
 
       allow(pipeline).to receive(:stage_input_queues)
-        .and_return({ router: input_queue, target_a: target_a_queue, target_b: target_b_queue })
-      allow(dag).to receive(:upstream).with(:router).and_return([:source])
+        .and_return({ broadcast_router => input_queue, target_a_stage => target_a_queue, target_b_stage => target_b_queue })
+      allow(dag).to receive(:upstream).with(broadcast_router).and_return([source_stage])
 
       # Put items and END signal
       input_queue << 1
       input_queue << 2
-      input_queue << Minigun::EndOfSource.new(:source)
+      input_queue << Minigun::EndOfSource.new(source_stage)
 
-      worker = described_class.new(pipeline, router_stage, config)
+      worker = described_class.new(pipeline, broadcast_router, config)
       worker.start
       worker.join
 

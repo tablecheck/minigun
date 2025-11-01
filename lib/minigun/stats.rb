@@ -5,13 +5,13 @@ require 'concurrent'
 module Minigun
   # Tracks execution statistics for a single stage
   class Stats
-    attr_reader :stage_name, :start_time, :end_time, :latency_samples, :latency_count
+    attr_reader :stage, :start_time, :end_time, :latency_samples, :latency_count
 
     # Latency tracking - reservoir sampling for uniform distribution
     RESERVOIR_SIZE = 1000
 
-    def initialize(stage_name, is_terminal: false)
-      @stage_name = stage_name
+    def initialize(stage_or_name, is_terminal: false) # REMOVE_THIS - should just be stage
+      @stage = stage_or_name  # Store stage object or name
       @is_terminal = is_terminal
       @start_time = nil
       @end_time = nil
@@ -23,6 +23,11 @@ module Minigun
       @latency_samples = []
       @latency_count = 0 # Total number of latency observations
       @mutex = Mutex.new
+    end
+
+    # Get stage name (extract from object if needed) # REMOVE_THIS @stage should always be a stage
+    def stage_name
+      @stage.is_a?(Stage) ? @stage.name : @stage
     end
 
     # Public accessors that return integer values from AtomicFixnum
@@ -149,7 +154,7 @@ module Minigun
     # Generate a summary hash
     def to_h
       {
-        stage_name: @stage_name,
+        stage_name: stage_name,
         runtime: runtime.round(2),
         items_produced: items_produced,
         items_consumed: items_consumed,
@@ -175,7 +180,7 @@ module Minigun
     # Pretty print
     def to_s
       parts = [
-        "Stage: #{@stage_name}",
+        "Stage: #{stage_name}",
         "Runtime: #{runtime.round(2)}s",
         "Items: #{total_items}",
         "Throughput: #{throughput.round(2)} items/s"
@@ -189,9 +194,48 @@ module Minigun
     end
   end
 
+  # Wrapper around stage_stats hash that supports both object and name-based lookup
+  class StageStatsWrapper # REMOVE_THIS -- why was it added?
+    def initialize(stage_stats_hash)
+      @stage_stats = stage_stats_hash
+    end
+
+    def [](key)
+      # If key is a Stage object, look up directly
+      return @stage_stats[key] if key.is_a?(Stage)
+
+      # If key is a name, find the stage object with that name
+      @stage_stats.each do |stage, stats|
+        return stats if stage.is_a?(Stage) && stage.name == key
+      end
+      nil
+    end
+
+    def each(&block)
+      @stage_stats.each(&block)
+    end
+
+    def values
+      @stage_stats.values
+    end
+
+    def keys
+      @stage_stats.keys
+    end
+
+    def size
+      @stage_stats.size
+    end
+  end
+
   # Aggregates statistics from multiple stages using DAG
   class AggregatedStats
-    attr_reader :pipeline_name, :stage_stats
+    attr_reader :pipeline_name, :dag
+
+    # Provide stage_stats that supports both object and name-based lookup
+    def stage_stats
+      @stage_stats_wrapper ||= StageStatsWrapper.new(@stage_stats)
+    end
 
     def initialize(pipeline_name, dag)
       @pipeline_name = pipeline_name
@@ -201,9 +245,11 @@ module Minigun
       @end_time = nil
     end
 
-    # Get or create stats for a stage
-    def for_stage(stage_name, is_terminal: false)
-      @stage_stats[stage_name] ||= Stats.new(stage_name, is_terminal: is_terminal)
+    # Get or create stats for a stage (accepts Stage object or name)
+    def for_stage(stage_or_name, is_terminal: false) # REMOVE_THIS - should just be stage
+      # Use stage object as key (or name for backward compat)
+      key = stage_or_name.is_a?(Stage) ? stage_or_name : stage_or_name
+      @stage_stats[key] ||= Stats.new(stage_or_name, is_terminal: is_terminal)
     end
 
     # Mark pipeline as started

@@ -229,10 +229,11 @@ module Minigun
             # Create a capture queue to collect results written to output_queue
             capture_queue = Queue.new
             capture_output = Minigun::OutputQueue.new(
-              stage.name,
+              stage,
               [capture_queue],
               {},
               {},
+              pipeline: nil, # REMOVE_THIS? - No pipeline in forked process
               stage_stats: stage_stats
             )
 
@@ -276,10 +277,11 @@ module Minigun
           # Fall back to processing inline for this item
           capture_queue = Queue.new
           capture_output = Minigun::OutputQueue.new(
-            stage.name,
+            stage,
             [capture_queue],
             {},
             {},
+            pipeline: nil, # REMOVE_THIS? - No pipeline in fallback mode
             stage_stats: stage_stats
           )
           if stage.respond_to?(:block) && stage.block
@@ -441,7 +443,7 @@ module Minigun
         pipeline&.send(:execute_fork_hooks, :after_fork, stage.name)
 
         # Create IPC-backed input queue that reads from parent via IPC
-        ipc_input_queue = Minigun::IpcInputQueue.new(from_parent, stage.name)
+        ipc_input_queue = Minigun::IpcInputQueue.new(from_parent, stage)
 
         # Create IPC-backed output queue that writes results back to parent via IPC
         ipc_output_queue = Minigun::IpcOutputQueue.new(to_parent, stage_stats)

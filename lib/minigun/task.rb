@@ -36,8 +36,8 @@ module Minigun
 
     # Get all named pipelines (composite stages in root_pipeline)
     def pipelines
-      @root_pipeline.stages.select { |_name, stage| stage.run_mode == :composite }
-                    .transform_values(&:pipeline)
+      @root_pipeline.stages.select { |stage| stage.run_mode == :composite }
+                    .to_h { |stage| [stage.name, stage.pipeline] }
     end
 
     # Get the DAG for pipeline-level routing
@@ -71,13 +71,26 @@ module Minigun
       end
 
       # Add the pipeline stage to the implicit pipeline
-      @root_pipeline.stages[name] = pipeline_stage
-      @root_pipeline.stage_order << name
-      @root_pipeline.dag.add_node(name)
+      @root_pipeline.stages << pipeline_stage
+      @root_pipeline.stage_order << pipeline_stage  # Use object for stage_order
+      @root_pipeline.dag.add_node(pipeline_stage)
 
-      # Extract routing if specified
+      # Extract routing if specified - resolve or defer edges
       to_targets = options[:to]
-      Array(to_targets).each { |target| @root_pipeline.dag.add_edge(name, target) } if to_targets
+      if to_targets
+        Array(to_targets).each do |target|
+          target_stage = target.is_a?(Stage) ? target : @root_pipeline.find_stage(target)
+          if target_stage
+            @root_pipeline.dag.add_edge(pipeline_stage, target_stage)
+          else
+            # Forward reference - defer until target is created
+            @root_pipeline.instance_variable_get(:@deferred_edges) << { from: pipeline_stage, to: target }
+          end
+        end
+      end
+
+      # Process any deferred edges that now have both endpoints
+      @root_pipeline.send(:process_deferred_edges!)
 
       pipeline_stage
     end
@@ -86,8 +99,9 @@ module Minigun
     # Pipelines are just PipelineStage objects in root_pipeline
     def define_pipeline(name, options = {})
       # Check if already exists
-      if @root_pipeline.stages.key?(name)
-        pipeline_stage = @root_pipeline.stages[name]
+      pipeline_stage = @root_pipeline.find_stage(name)
+
+      if pipeline_stage
         raise Minigun::Error, "Stage #{name} already exists as a non-composite stage" unless pipeline_stage.run_mode == :composite
 
         pipeline = pipeline_stage.pipeline
@@ -97,25 +111,40 @@ module Minigun
         pipeline = Pipeline.new(name, @config)
         pipeline_stage.pipeline = pipeline
 
-        @root_pipeline.stages[name] = pipeline_stage
-        @root_pipeline.stage_order << name
-        @root_pipeline.dag.add_node(name)
+        @root_pipeline.stages << pipeline_stage
+        @root_pipeline.stage_order << pipeline_stage  # Use object for stage_order
+        @root_pipeline.dag.add_node(pipeline_stage)
       end
 
-      # Handle routing in root_pipeline DAG
+      # Handle routing in root_pipeline DAG - resolve or defer edges
+      # TODO: This should probably be better delegated to root pipeline;
+      # The logic is redundant with pipeline
       to_targets = options[:to]
       if to_targets
         Array(to_targets).each do |target|
-          @root_pipeline.dag.add_edge(name, target)
+          if (target_stage = @root_pipeline.find_stage(target))
+            @root_pipeline.dag.add_edge(pipeline_stage, target_stage)
+          else
+            # Forward reference - defer until target is created
+            @root_pipeline.instance_variable_get(:@deferred_edges) << { from: pipeline_stage, to: target }
+          end
         end
       end
 
       from_sources = options[:from]
       if from_sources
         Array(from_sources).each do |source|
-          @root_pipeline.dag.add_edge(source, name)
+          if (source_stage = @root_pipeline.find_stage(source))
+            @root_pipeline.dag.add_edge(source_stage, pipeline_stage)
+          else
+            # Forward reference - defer until source is created
+            @root_pipeline.instance_variable_get(:@deferred_edges) << { from: source, to: pipeline_stage }
+          end
         end
       end
+
+      # Process any deferred edges that now have both endpoints
+      @root_pipeline.send(:process_deferred_edges!)
 
       # Execute block in context of pipeline definition
       yield pipeline if block_given?
