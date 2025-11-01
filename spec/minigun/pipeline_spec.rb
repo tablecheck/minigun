@@ -229,7 +229,7 @@ RSpec.describe Minigun::Pipeline do
       # Add PipelineStage producer
       pipeline_stage = Minigun::PipelineStage.new(pipeline, :pipeline_source, nil, {})
       nested_pipeline = described_class.new(:nested, config)
-      pipeline_stage.pipeline = nested_pipeline
+      pipeline_stage.nested_pipeline = nested_pipeline
       pipeline.stages[:pipeline_source] = pipeline_stage
       pipeline.stage_order << :pipeline_source
       pipeline.dag.add_node(:pipeline_source)
