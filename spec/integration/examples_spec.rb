@@ -1162,13 +1162,20 @@ RSpec.describe 'Examples Integration' do
   end
 
   describe '28_broadcast_fan_out.rb' do
-    it 'demonstrates broadcast fan-out pattern' do
+    it 'demonstrates broadcast fan-out pattern', timeout: 5 do
       load File.expand_path('../../examples/28_broadcast_fan_out.rb', __dir__)
 
       example = BroadcastFanOutExample.new
       example.run
 
-      expect(example.results.size).to be > 0
+      # Each of 3 items goes to 3 branches = 9 results
+      expect(example.results.size).to eq(9)
+      
+      # Verify broadcast: each branch should have processed all 3 items
+      by_branch = example.results.group_by { |r| r[:branch] }
+      expect(by_branch[:validation].size).to eq(3)
+      expect(by_branch[:transform].size).to eq(3)
+      expect(by_branch[:analysis].size).to eq(3)
     end
   end
 
@@ -1444,7 +1451,7 @@ RSpec.describe 'Examples Integration' do
       expect(stages.size).to eq(2)
 
       # Test local priority scenario
-      example3 = LocalPriorityDemo.new
+      example3 = LocalPriorityExample.new
       example3.run
       expect(example3.results).to eq(['local:1'])
     end

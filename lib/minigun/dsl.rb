@@ -106,12 +106,11 @@ module Minigun
 
       @_pipeline_blocks_evaluated = true
 
-      # Deep copy class-level task for this instance
-      # This prevents shared state across multiple runs/instances
+      # Create a fresh task for this instance with config from class task
+      # Don't duplicate the pipeline since we'll re-evaluate blocks to create stages
       class_task = self.class._minigun_task
       @_minigun_task = Minigun::Task.new(
-        config: class_task.config.dup,
-        root_pipeline: class_task.root_pipeline.dup
+        config: class_task.config.dup
       )
 
       # Evaluate stored pipeline blocks on instance task with instance context
