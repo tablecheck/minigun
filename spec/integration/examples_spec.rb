@@ -252,10 +252,15 @@ RSpec.describe 'Examples Integration' do
       load File.expand_path('../../examples/10_routing_to_nested_stages.rb', __dir__)
 
       example = RoutingToNestedStagesExample.new
-      example.run
+      begin
+        example.run
 
-      # Should process all 5 items through the nested :save stage
-      expect(example.results.sort).to eq([1, 2, 3, 4, 5])
+        # Should process all 5 items through the nested :save stage
+        # Works on both Windows (inline) and Linux (with tempfile)
+        expect(example.results.sort).to eq([1, 2, 3, 4, 5])
+      ensure
+        example.cleanup
+      end
     end
   end
 

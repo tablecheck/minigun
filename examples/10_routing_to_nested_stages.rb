@@ -12,6 +12,7 @@
 # - Parent DAG includes nested stages, enabling direct routing
 
 require_relative '../lib/minigun'
+require 'tempfile'
 
 class RoutingToNestedStagesExample
   include Minigun::DSL
@@ -20,6 +21,12 @@ class RoutingToNestedStagesExample
 
   def initialize
     @results = []
+    @temp_file = Tempfile.new(['minigun_routing_results', '.txt'])
+    @temp_file.close
+  end
+
+  def cleanup
+    File.unlink(@temp_file.path) if @temp_file && File.exist?(@temp_file.path)
   end
 
   pipeline do
@@ -41,8 +48,22 @@ class RoutingToNestedStagesExample
     process_per_batch(max: 2) do
       consumer :save do |batch|
         puts "[Consumer:save] (PID #{Process.pid}) Received batch: #{batch.inspect}"
-        @results.concat(batch)
+        
+        # Write to temp file (fork-safe) - each item on its own line
+        File.open(@temp_file.path, 'a') do |f|
+          f.flock(File::LOCK_EX)
+          batch.each { |item| f.puts(item) }
+          f.flock(File::LOCK_UN)
+        end
+        
         sleep 0.1 # Simulate work
+      end
+    end
+
+    after_run do
+      # Read fork results from temp file
+      if File.exist?(@temp_file.path)
+        @results = File.readlines(@temp_file.path).map(&:to_i)
       end
     end
   end
@@ -54,12 +75,16 @@ if __FILE__ == $PROGRAM_NAME
   puts "=" * 60
 
   example = RoutingToNestedStagesExample.new
-  example.run
+  begin
+    example.run
 
-  puts "\n" + "=" * 60
-  puts "Results:"
-  puts "  Items processed: #{example.results.sort.inspect}"
-  puts "  Expected: [1, 2, 3, 4, 5]"
-  puts "  Status: #{example.results.sort == [1, 2, 3, 4, 5] ? '✓ SUCCESS' : '✗ FAILED'}"
-  puts "=" * 60
+    puts "\n" + "=" * 60
+    puts "Results:"
+    puts "  Items processed: #{example.results.sort.inspect}"
+    puts "  Expected: [1, 2, 3, 4, 5]"
+    puts "  Status: #{example.results.sort == [1, 2, 3, 4, 5] ? '✓ SUCCESS' : '✗ FAILED'}"
+    puts "=" * 60
+  ensure
+    example.cleanup
+  end
 end
