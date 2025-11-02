@@ -112,6 +112,24 @@ cow_fork_pool
         _with_execution_context(context, &)
       end
 
+=================
+
++        # Get pipeline name - pipeline might be a Pipeline or Task
++        pipeline_name = @pipeline.is_a?(Pipeline) ? @pipeline.name : nil
++        task.registry.register(self, pipeline_name: pipeline_name)
+       else
+
+======================
+
+lock DAG /pipelines/task when running (no modification possible)
+
+=======================
+
+named_stage_keepalive_seconds = nil, 0, 5, infinity
+keepalive_seconds
+- needs to send keepalives to downstreams (solve in DAG?)
+- mark & sweep GC? mark them for overall pipeline ermination
+
 
 ===============================
 
@@ -123,7 +141,46 @@ parallel and sequential/sequence/series keywords --> influences DAG building
 
 ==============================
 
+Pipeline names should be consolidated with stage names
+
+==============================
+
+better unique ID generation
+_jf02ASj3 ??
+
+==============================
+
 make per item latency tracking optional (and stats?)
+
+============================
+
+allow this, and resolve names locally, and then up the chain. we may need a name resolution tree.
+
+routing to an ambiguous stage should raise an error, unless its an immediate neighbor
+
+do what's sensible here
+
+        pipeline :pipe_a do
+          processor :transform do |item, output|
+            output << (item + 100)
+          end
+
+          consumer :collect do |item, _output|
+            @mutex.synchronize { @results_a << item }
+          end
+        end
+
+        pipeline :pipe_b do
+          processor :transform do |item, output|
+            output << (item + 200)
+          end
+
+          consumer :collect do |item, _output|
+            @mutex.synchronize { @results_b << item }
+          end
+        end
+
+names string/symbol -- always convert to string for referencing
 
 =============================================
 
@@ -140,7 +197,6 @@ Support Cross-Pipeline Routing?
 
   task.minigun.dag
 
-
   task.pipeline(:foo).stage(:bar)
   task.pipelines
   task.stages
@@ -149,6 +205,15 @@ Support Cross-Pipeline Routing?
 
 fix DataProcessingPipeline spec
 I see the issue now - when you're inside a pipeline block, the stages within it are part of a PipelineStage which doesn't support output.to(). The output parameter is just an Array for collecting items, not an OutputQueue.
+
+
+============================================
+
+supervision tree of processes
+
+========================================
+
+htop-like monitoring dashboard (CLI)
 
 ====================================
 
