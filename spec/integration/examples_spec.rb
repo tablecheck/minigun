@@ -1175,7 +1175,7 @@ RSpec.describe 'Examples Integration' do
 
       # Each of 3 items goes to 3 branches = 9 results
       expect(example.results.size).to eq(9)
-      
+
       # Verify broadcast: each branch should have processed all 3 items
       by_branch = example.results.group_by { |r| r[:branch] }
       expect(by_branch[:validation].size).to eq(3)
