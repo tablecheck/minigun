@@ -52,7 +52,7 @@ module Minigun
     # Find a stage by name or object reference
     def find_stage(name_or_obj)
       return name_or_obj if name_or_obj.is_a?(Stage)
-      
+
       # Use the NameRegistry for proper scoped lookup with ambiguity detection
       if task&.registry
         task.registry.find_by_name(name_or_obj, from_pipeline: self)

@@ -43,16 +43,16 @@ class AmbiguousChildrenDemo
   def demonstrate_ambiguity
     # Trigger pipeline evaluation
     _evaluate_pipeline_blocks!
-    
+
     task = _minigun_task
     root_pipeline = task.root_pipeline
     registry = task.registry
 
     puts "Attempting to look up :processor from root pipeline..."
     puts "Multiple nested pipelines contain :processor"
-    
+
     begin
-      # This should raise AmbiguousRoutingError  
+      # This should raise AmbiguousRoutingError
       registry.find_by_name(:processor, from_pipeline: root_pipeline)
       puts "\n✗ FAILED: Expected AmbiguousRoutingError"
       nil
@@ -94,21 +94,21 @@ class UniqueNamesDemo
 
   def demonstrate_unique_names
     _evaluate_pipeline_blocks!
-    
+
     task = _minigun_task
     root_pipeline = task.root_pipeline
     registry = task.registry
 
     puts "Looking up stages with unique names:"
-    
+
     # These lookups succeed because names are unique
     proc_a = registry.find_by_name(:processor_a, from_pipeline: root_pipeline)
     proc_b = registry.find_by_name(:processor_b, from_pipeline: root_pipeline)
-    
+
     puts "  ✓ Found :processor_a - #{proc_a.inspect}"
     puts "  ✓ Found :processor_b - #{proc_b.inspect}"
     puts "  No ambiguity when names are unique!"
-    
+
     [proc_a, proc_b]
   end
 end
@@ -151,7 +151,7 @@ if __FILE__ == $PROGRAM_NAME
   puts "\n--- Scenario 1: Ambiguous lookup in children ---"
   example1 = AmbiguousChildrenDemo.new
   error = example1.demonstrate_ambiguity
-  
+
   if error
     puts "\n✓ SUCCESS: AmbiguousRoutingError was properly detected"
     puts "  The registry prevents lookups with multiple matches"
@@ -163,14 +163,14 @@ if __FILE__ == $PROGRAM_NAME
   puts "--- Scenario 2: Unique names (works correctly) ---"
   example2 = UniqueNamesDemo.new
   stages = example2.demonstrate_unique_names
-  
+
   puts "\n✓ SUCCESS: Registry found #{stages.size} stages with unique names"
 
   puts "\n" + "=" * 70
   puts "--- Scenario 3: Local priority (works correctly) ---"
   example3 = LocalPriorityExample.new
   example3.run
-  
+
   puts "\nResults: #{example3.results.inspect}"
   puts "✓ SUCCESS: Local stage takes priority over nested stages"
   puts "=" * 70
