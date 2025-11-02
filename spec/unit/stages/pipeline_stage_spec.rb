@@ -5,8 +5,8 @@ require 'spec_helper'
 RSpec.describe Minigun::PipelineStage do
   let(:config) { { max_threads: 2, max_processes: 1 } }
   let(:mock_context) { Object.new }
-  let(:mock_registry) { instance_double(Minigun::NameRegistry, register: nil) }
-  let(:mock_task) { instance_double(Minigun::Task, registry: mock_registry) }
+  let(:mock_registry) { instance_double(Minigun::StageRegistry, register: nil) }
+  let(:mock_task) { instance_double(Minigun::Task, stage_registry: mock_registry) }
   let(:mock_pipeline) { instance_double(Minigun::Pipeline, name: 'test_pipeline', context: mock_context, task: mock_task) }
 
   describe '#initialize' do

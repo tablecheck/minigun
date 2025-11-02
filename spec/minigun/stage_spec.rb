@@ -3,8 +3,8 @@
 require 'spec_helper'
 
 RSpec.describe Minigun::Stage do
-  let(:mock_registry) { instance_double(Minigun::NameRegistry, register: nil) }
-  let(:mock_task) { instance_double(Minigun::Task, registry: mock_registry) }
+  let(:mock_registry) { instance_double(Minigun::StageRegistry, register: nil) }
+  let(:mock_task) { instance_double(Minigun::Task, stage_registry: mock_registry) }
   let(:mock_pipeline) { instance_double(Minigun::Pipeline, name: 'test_pipeline', task: mock_task) }
 
   describe 'base class' do
@@ -30,8 +30,8 @@ RSpec.describe Minigun::Stage do
 end
 
 RSpec.describe Minigun::ProducerStage do
-  let(:mock_registry) { instance_double(Minigun::NameRegistry, register: nil) }
-  let(:mock_task) { instance_double(Minigun::Task, registry: mock_registry) }
+  let(:mock_registry) { instance_double(Minigun::StageRegistry, register: nil) }
+  let(:mock_task) { instance_double(Minigun::Task, stage_registry: mock_registry) }
   let(:mock_pipeline) { instance_double(Minigun::Pipeline, name: 'test_pipeline', task: mock_task) }
 
   describe 'producer behavior' do
@@ -59,8 +59,8 @@ RSpec.describe Minigun::ProducerStage do
 end
 
 RSpec.describe Minigun::ConsumerStage do
-  let(:mock_registry) { instance_double(Minigun::NameRegistry, register: nil) }
-  let(:mock_task) { instance_double(Minigun::Task, registry: mock_registry) }
+  let(:mock_registry) { instance_double(Minigun::StageRegistry, register: nil) }
+  let(:mock_task) { instance_double(Minigun::Task, stage_registry: mock_registry) }
   let(:mock_pipeline) { instance_double(Minigun::Pipeline, name: 'test_pipeline', task: mock_task) }
 
   describe 'processor behavior' do
@@ -116,8 +116,8 @@ RSpec.describe Minigun::ConsumerStage do
 end
 
 RSpec.describe Minigun::AccumulatorStage do
-  let(:mock_registry) { instance_double(Minigun::NameRegistry, register: nil) }
-  let(:mock_task) { instance_double(Minigun::Task, registry: mock_registry) }
+  let(:mock_registry) { instance_double(Minigun::StageRegistry, register: nil) }
+  let(:mock_task) { instance_double(Minigun::Task, stage_registry: mock_registry) }
   let(:mock_pipeline) { instance_double(Minigun::Pipeline, name: 'test_pipeline', task: mock_task) }
 
   it 'is a special batching stage' do
@@ -127,8 +127,8 @@ RSpec.describe Minigun::AccumulatorStage do
 end
 
 RSpec.describe 'Stage common behavior' do
-  let(:mock_registry) { instance_double(Minigun::NameRegistry, register: nil) }
-  let(:mock_task) { instance_double(Minigun::Task, registry: mock_registry) }
+  let(:mock_registry) { instance_double(Minigun::StageRegistry, register: nil) }
+  let(:mock_task) { instance_double(Minigun::Task, stage_registry: mock_registry) }
   let(:mock_pipeline) { instance_double(Minigun::Pipeline, name: 'test_pipeline', task: mock_task) }
   let(:stage) { Minigun::ConsumerStage.new(:test, mock_pipeline, proc { |x, _output| x * 2 }, { foo: 'bar' }) }
 

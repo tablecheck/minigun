@@ -3,7 +3,7 @@
 
 # Example: Ambiguous Routing Detection
 #
-# Demonstrates how the NameRegistry detects ambiguous stage name references
+# Demonstrates how the StageRegistry detects ambiguous stage name references
 # when multiple stages with the same name exist at the same lookup level.
 #
 # The 3-level lookup strategy:
@@ -14,9 +14,6 @@
 # Ambiguity errors occur when:
 # - Multiple nested pipelines have same stage name (level 2)
 # - Multiple pipelines globally have same stage name with no local match (level 3)
-#
-# NOTE: This example demonstrates the NameRegistry's lookup logic directly
-# rather than through routing, since registry integration into routing is TBD.
 
 require_relative '../lib/minigun'
 
@@ -46,14 +43,14 @@ class AmbiguousChildrenDemo
 
     task = _minigun_task
     root_pipeline = task.root_pipeline
-    registry = task.registry
+    stage_registry = task.stage_registry
 
     puts "Attempting to look up :processor from root pipeline..."
     puts "Multiple nested pipelines contain :processor"
 
     begin
       # This should raise AmbiguousRoutingError
-      registry.find_by_name(:processor, from_pipeline: root_pipeline)
+      stage_registry.find_by_name(:processor, from_pipeline: root_pipeline)
       puts "\n✗ FAILED: Expected AmbiguousRoutingError"
       nil
     rescue Minigun::AmbiguousRoutingError => e
@@ -97,13 +94,13 @@ class UniqueNamesDemo
 
     task = _minigun_task
     root_pipeline = task.root_pipeline
-    registry = task.registry
+    stage_registry = task.stage_registry
 
     puts "Looking up stages with unique names:"
 
     # These lookups succeed because names are unique
-    proc_a = registry.find_by_name(:processor_a, from_pipeline: root_pipeline)
-    proc_b = registry.find_by_name(:processor_b, from_pipeline: root_pipeline)
+    proc_a = stage_registry.find_by_name(:processor_a, from_pipeline: root_pipeline)
+    proc_b = stage_registry.find_by_name(:processor_b, from_pipeline: root_pipeline)
 
     puts "  ✓ Found :processor_a - #{proc_a.inspect}"
     puts "  ✓ Found :processor_b - #{proc_b.inspect}"
@@ -154,7 +151,7 @@ if __FILE__ == $PROGRAM_NAME
 
   if error
     puts "\n✓ SUCCESS: AmbiguousRoutingError was properly detected"
-    puts "  The registry prevents lookups with multiple matches"
+    puts "  The stage_registry prevents lookups with multiple matches"
   else
     puts "\n✗ FAILED: Expected AmbiguousRoutingError"
   end

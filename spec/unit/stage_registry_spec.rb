@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-RSpec.describe Minigun::NameRegistry do
+RSpec.describe Minigun::StageRegistry do
   let(:registry) { described_class.new }
 
   # Helper to create a mock pipeline

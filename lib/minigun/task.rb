@@ -4,7 +4,7 @@ module Minigun
   # Task orchestrates one or more pipelines
   # Supports both single-pipeline (implicit) and multi-pipeline modes
   class Task
-    attr_reader :config, :root_pipeline, :registry
+    attr_reader :config, :root_pipeline, :stage_registry
 
     def initialize(config: nil, root_pipeline: nil)
       @config = config || {
@@ -17,8 +17,8 @@ module Minigun
         use_ipc: false
       }
 
-      # Initialize the registry for stage management
-      @registry = NameRegistry.new
+      # Initialize the stage_registry for stage management
+      @stage_registry = StageRegistry.new
 
       # Root pipeline - all stages and nested pipelines live here
       @root_pipeline = root_pipeline || Pipeline.new(:default, self, nil, @config)

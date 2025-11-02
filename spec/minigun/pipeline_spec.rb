@@ -4,7 +4,7 @@ require 'spec_helper'
 
 RSpec.describe Minigun::Pipeline do
   let(:config) { { max_threads: 3, max_processes: 2 } }
-  let(:task) { instance_double(Minigun::Task, registry: nil) }
+  let(:task) { instance_double(Minigun::Task, stage_registry: nil) }
   let(:pipeline) { described_class.new(:test_pipeline, task, nil, config) }
 
   describe '#initialize' do

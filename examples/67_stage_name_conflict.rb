@@ -3,7 +3,7 @@
 
 # Example: Stage Name Conflict Detection
 #
-# Demonstrates how the NameRegistry detects and prevents duplicate stage names
+# Demonstrates how the StageRegistry detects and prevents duplicate stage names
 # within the same pipeline. This ensures stage names are unique at each level.
 #
 # Key points:

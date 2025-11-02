@@ -9,7 +9,7 @@ module Minigun
   # 2. Names are optional and scoped to pipelines (user-friendly)
   # 3. Name resolution follows: local → children → global
   # 4. Ambiguous names raise errors at resolution time
-  class NameRegistry
+  class StageRegistry
     def initialize
       @global_names = Hash.new { |h, k| h[k] = [] } # { name_string => [Stage, Stage, ...] }
       @pipeline_stages = {} # { Pipeline object => { name_string => Stage } }
@@ -17,7 +17,7 @@ module Minigun
       @mutex = Mutex.new
     end
 
-    # Register a stage with the registry
+    # Register a stage with the stage_registry
     # @param pipeline [Pipeline] The pipeline object this stage belongs to
     # @param stage [Stage] The stage object to register
     def register(pipeline, stage)
