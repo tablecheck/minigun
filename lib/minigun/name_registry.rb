@@ -128,7 +128,8 @@ module Minigun
 
       results = []
 
-      pipeline.stages.each_value do |stage|
+      # pipeline.stages is an Array of Stage objects
+      pipeline.stages.each do |stage|
         next unless stage.run_mode == :composite
         next unless stage.respond_to?(:nested_pipeline) && stage.nested_pipeline
 

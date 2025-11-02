@@ -52,7 +52,14 @@ module Minigun
     # Find a stage by name or object reference
     def find_stage(name_or_obj)
       return name_or_obj if name_or_obj.is_a?(Stage)
-      @stages.find { |stage| stage.name == name_or_obj }
+      
+      # Use the NameRegistry for proper scoped lookup with ambiguity detection
+      if task&.registry
+        task.registry.find_by_name(name_or_obj, from_pipeline: self)
+      else
+        # Fallback to local search if registry not available (e.g., in tests)
+        @stages.find { |stage| stage.name == name_or_obj }
+      end
     end
 
     # Duplicate this pipeline for inheritance
@@ -126,8 +133,10 @@ module Minigun
                 end
               end
 
-      # Check for name collision
-      raise Minigun::Error, "Stage name collision: '#{name}' is already defined in pipeline '#{@name}'" if find_stage(name)
+      # Check for name collision LOCALLY (within this pipeline only)
+      if @stages.any? { |s| s.name == name }
+        raise Minigun::Error, "Stage name collision: '#{name}' is already defined in pipeline '#{@name}'"
+      end
 
       # Store stage in array
       @stages << stage

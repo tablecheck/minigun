@@ -1414,6 +1414,42 @@ RSpec.describe 'Examples Integration' do
     end
   end
 
+  describe '67_stage_name_conflict.rb' do
+    it 'demonstrates stage name conflict detection' do
+      load File.expand_path('../../examples/67_stage_name_conflict.rb', __dir__)
+
+      # Should not raise - the example catches the error internally
+      expect { ConflictingPipeline.new.run }.to raise_error(Minigun::StageNameConflict)
+
+      # Test that scoped names work
+      example = ScopedNamesExample.new
+      example.run
+      expect(example.results.size).to eq(6)
+    end
+  end
+
+  describe '68_ambiguous_routing.rb' do
+    it 'demonstrates ambiguous routing detection' do
+      load File.expand_path('../../examples/68_ambiguous_routing.rb', __dir__)
+
+      # Test ambiguous children scenario
+      example1 = AmbiguousChildrenDemo.new
+      error = example1.demonstrate_ambiguity
+      expect(error).to be_a(Minigun::AmbiguousRoutingError)
+      expect(error.message).to include('found 2 matches')
+
+      # Test unique names scenario
+      example2 = UniqueNamesDemo.new
+      stages = example2.demonstrate_unique_names
+      expect(stages.size).to eq(2)
+
+      # Test local priority scenario
+      example3 = LocalPriorityDemo.new
+      example3.run
+      expect(example3.results).to eq(['local:1'])
+    end
+  end
+
   # Coverage check: ensure all example files have tests
   describe 'Example Coverage' do
     it 'has tests for all example files' do

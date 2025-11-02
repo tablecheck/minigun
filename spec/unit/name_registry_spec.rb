@@ -6,8 +6,8 @@ RSpec.describe Minigun::NameRegistry do
   let(:registry) { described_class.new }
 
   # Helper to create a mock pipeline
-  def mock_pipeline(name)
-    double('Pipeline', name: name, stages: {})
+  def mock_pipeline(name, stages = [])
+    double('Pipeline', name: name, stages: stages)
   end
 
   # Helper to create a mock stage
@@ -148,8 +148,8 @@ RSpec.describe Minigun::NameRegistry do
         nested_stage = mock_stage(:nested)
         pipeline_stage = mock_composite_stage(:pipeline_stage, nested_pipeline1)
 
-        # Set up nested pipeline relationship
-        allow(root_pipeline).to receive(:stages).and_return({ pipeline_stage: pipeline_stage })
+        # Set up nested pipeline relationship (stages is an Array)
+        allow(root_pipeline).to receive(:stages).and_return([pipeline_stage])
 
         registry.register(nested_pipeline1, nested_stage)
 
@@ -164,11 +164,11 @@ RSpec.describe Minigun::NameRegistry do
         pipeline_stage1 = mock_composite_stage(:ps1, nested_pipeline1)
         pipeline_stage2 = mock_composite_stage(:ps2, nested_pipeline2)
 
-        # Set up two nested pipelines with same stage name
-        allow(root_pipeline).to receive(:stages).and_return({
-          ps1: pipeline_stage1,
-          ps2: pipeline_stage2
-        })
+        # Set up two nested pipelines with same stage name (stages is an Array)
+        allow(root_pipeline).to receive(:stages).and_return([
+          pipeline_stage1,
+          pipeline_stage2
+        ])
 
         registry.register(nested_pipeline1, nested_stage1)
         registry.register(nested_pipeline2, nested_stage2)
@@ -184,9 +184,9 @@ RSpec.describe Minigun::NameRegistry do
         ps2 = mock_composite_stage(:ps2, deep_pipeline)
         ps1 = mock_composite_stage(:ps1, nested_pipeline1)
 
-        # root -> nested1 -> deep
-        allow(root_pipeline).to receive(:stages).and_return({ ps1: ps1 })
-        allow(nested_pipeline1).to receive(:stages).and_return({ ps2: ps2 })
+        # root -> nested1 -> deep (stages is an Array)
+        allow(root_pipeline).to receive(:stages).and_return([ps1])
+        allow(nested_pipeline1).to receive(:stages).and_return([ps2])
 
         registry.register(deep_pipeline, deep_stage)
 
@@ -199,9 +199,9 @@ RSpec.describe Minigun::NameRegistry do
         ps2 = mock_composite_stage(:ps2, root_pipeline) # Circular reference!
         ps1 = mock_composite_stage(:ps1, nested_pipeline1)
 
-        # Create circular reference: root -> nested1 -> root
-        allow(root_pipeline).to receive(:stages).and_return({ ps1: ps1 })
-        allow(nested_pipeline1).to receive(:stages).and_return({ ps2: ps2 })
+        # Create circular reference: root -> nested1 -> root (stages is an Array)
+        allow(root_pipeline).to receive(:stages).and_return([ps1])
+        allow(nested_pipeline1).to receive(:stages).and_return([ps2])
 
         registry.register(nested_pipeline1, circular_stage)
 
