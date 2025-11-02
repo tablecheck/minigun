@@ -247,6 +247,18 @@ RSpec.describe 'Examples Integration' do
     end
   end
 
+  describe '10_routing_to_nested_stages.rb' do
+    it 'demonstrates routing to nested pipeline stages' do
+      load File.expand_path('../../examples/10_routing_to_nested_stages.rb', __dir__)
+
+      example = RoutingToNestedStagesExample.new
+      example.run
+
+      # Should process all 5 items through the nested :save stage
+      expect(example.results.sort).to eq([1, 2, 3, 4, 5])
+    end
+  end
+
   describe '10_web_crawler.rb' do
     it 'crawls and processes pages' do
       load File.expand_path('../../examples/10_web_crawler.rb', __dir__)
