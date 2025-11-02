@@ -44,7 +44,7 @@ module Minigun
     attr_reader :pipeline, :name, :options, :block
 
     # Positional constructor: Stage.new(name, pipeline, block, options)
-    def initialize(name, pipeline, block, options = {})
+    def initialize(name, pipeline, block = nil, options = {})
       @name = name
       @pipeline = pipeline
       @block = block
@@ -60,7 +60,8 @@ module Minigun
     end
 
     def task
-      pipeline&.task
+      return unless @pipeline&.respond_to?(:task)
+      @pipeline.task
     end
 
     def root_pipeline
