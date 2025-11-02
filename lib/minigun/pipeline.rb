@@ -58,6 +58,7 @@ module Minigun
         task.stage_registry.find_by_name(name_or_obj, from_pipeline: self)
       else
         # Fallback to local search if registry not available (e.g., in tests)
+        # TODO: This condition should be removed, and we should rely 100% on task.registry
         @stages.find { |stage| stage.name == name_or_obj }
       end
     end
