@@ -477,6 +477,7 @@ module Minigun
       def distribute_work(input_queue, output_queue)
         worker_index = 0
         result_threads = []
+        received_end_of_stage = nil
 
         # Start result collection threads for each worker
         @workers.each do |worker|
@@ -499,6 +500,7 @@ module Minigun
             item = input_queue.pop
 
             if item.is_a?(Minigun::EndOfStage)
+              received_end_of_stage = item
               # Send EndOfStage to all workers
               @workers.each do |worker|
                 begin
@@ -508,8 +510,10 @@ module Minigun
                   # Worker already closed, ignore
                 end
               end
-              # Propagate EndOfStage to output queue for downstream stages
-              output_queue << item
+              # Propagate EndOfStage to output queue BEFORE joining threads
+              # This prevents deadlock: downstream IPC workers need this signal
+              # to stop waiting, otherwise we deadlock when joining result threads
+              output_queue << received_end_of_stage
               break
             end
 
