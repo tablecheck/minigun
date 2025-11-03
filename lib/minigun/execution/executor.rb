@@ -508,6 +508,8 @@ module Minigun
                   # Worker already closed, ignore
                 end
               end
+              # Propagate EndOfStage to output queue for downstream stages
+              output_queue << item
               break
             end
 
