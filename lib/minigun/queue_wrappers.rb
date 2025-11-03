@@ -188,6 +188,10 @@ module Minigun
       begin
         if item.nil?
           Marshal.dump({ type: :no_result }, @pipe_writer)
+        elsif item.is_a?(Minigun::EndOfStage)
+          # EndOfStage contains Stage objects which aren't marshalable
+          # Send as a control message instead
+          Marshal.dump({ type: :end_of_stage }, @pipe_writer)
         else
           Marshal.dump({ type: :result, result: item }, @pipe_writer)
         end

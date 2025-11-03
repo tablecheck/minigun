@@ -152,6 +152,12 @@ module Minigun
           warn "[Minigun] Skipped non-serializable result: #{response[:error]} (type: #{response[:item_type]})"
         when :no_result
           # Child processed but produced no output
+        when :end_of_stage
+          # Worker finished processing and sent EndOfStage
+          # Create a new EndOfStage for this IPC stage and propagate it
+          if stage_ctx
+            output_queue << Minigun::EndOfStage.new(stage_ctx.stage)
+          end
         end
       rescue EOFError
         # Normal EOF - worker finished processing, re-raise to exit collection loop
@@ -510,10 +516,6 @@ module Minigun
                   # Worker already closed, ignore
                 end
               end
-              # Propagate EndOfStage to output queue BEFORE joining threads
-              # This prevents deadlock: downstream IPC workers need this signal
-              # to stop waiting, otherwise we deadlock when joining result threads
-              output_queue << received_end_of_stage
               break
             end
 
@@ -535,6 +537,8 @@ module Minigun
           end
         ensure
           # Wait for all result collection threads to finish
+          # Workers send EndOfStage back via IPC when they finish, so result threads
+          # will naturally collect and propagate it to output_queue
           result_threads.each(&:join)
         end
       end

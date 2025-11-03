@@ -242,6 +242,7 @@ module Minigun
       loop do
         item = input_queue.pop
 
+        # Just break from the loop - the worker_loop will handle signaling completion
         break if item.is_a?(EndOfStage)
 
         # Execute the block or call method with the item, tracking per-item latency
