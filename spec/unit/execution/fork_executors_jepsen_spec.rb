@@ -13,32 +13,28 @@ require 'set'
 # - Resource cleanup
 
 RSpec.describe 'Fork Executors - Jepsen-style Tests', skip: !Minigun.fork? do
-  let(:dag) { double('dag', terminal?: false) }
-  let(:pipeline) do
-    double('pipeline',
-           name: 'test_pipeline',
-           dag: dag,
-           send: nil)
-  end
-  let(:mock_stage) { double('Stage', name: 'test_stage') }
+  # Create real Task and Pipeline objects for proper testing
+  let(:task) { Minigun::Task.new }
+  let(:pipeline) { task.root_pipeline }
+  let(:mock_stage) { double('Stage', name: 'test_stage', task: task) }
   let(:stage_stats) { Minigun::Stats.new(mock_stage) }
   let(:stage_ctx) do
-    Struct.new(:stage_stats, :pipeline, :root_pipeline).new(stage_stats, pipeline, pipeline)
+    Struct.new(:stage_stats, :pipeline, :root_pipeline, :stage).new(stage_stats, pipeline, pipeline, mock_stage)
   end
 
-  # Helper to create a mock stage that processes items
+  # Helper to create a real stage that processes items
   def create_stage(name: 'test_stage', processor: nil, expects_context: false)
     processor ||= ->(item, output) { output << (item * 2) }
 
-    # Create a mock pipeline for stage construction
-    mock_pipeline = instance_double(Minigun::Pipeline, name: 'test_pipeline')
+    # Use the real pipeline from the task
+    real_pipeline = task.root_pipeline
 
     # Create real ConsumerStage with a block that processes (item, output)
     # RSpec mocks don't work across forks, so we need real objects
     # ConsumerStage#execute handles the input loop and calls block per item
     Minigun::ConsumerStage.new(
       name.to_sym,
-      mock_pipeline,
+      real_pipeline,
       proc { |item, output_queue|
         # Block is executed via instance_exec(user_context), so 'self' is the user context
         # If expects_context=true, pass user context to processor; otherwise pass output_queue
@@ -95,14 +91,14 @@ RSpec.describe 'Fork Executors - Jepsen-style Tests', skip: !Minigun.fork? do
         # Run same dataset multiple times, should get same results (unordered)
         items = (1..50).to_a.shuffle
 
-        3.times do
+        3.times do |i|
           input_queue = Queue.new
           output_queue = Queue.new
 
-          items.each { |i| input_queue << i }
+          items.each { |item| input_queue << item }
           input_queue << Minigun::EndOfStage.new('test')
 
-          stage = create_stage
+          stage = create_stage(name: "test_stage_#{i}")
           executor_instance = Minigun::Execution.create_executor(executor_type, stage_ctx, max_size: pool_size)
           executor_instance.execute_stage(stage, {}, input_queue, output_queue)
 
