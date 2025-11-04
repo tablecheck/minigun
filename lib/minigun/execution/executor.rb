@@ -566,13 +566,15 @@ module Minigun
 
       # Get queues for nested stages (for dynamic routing support)
       def get_nested_stage_queues
+        return [] unless @stage_ctx.respond_to?(:stage)
+
         stage = @stage_ctx.stage
         return [] unless stage.is_a?(Minigun::PipelineStage)
 
         nested_pipeline = stage.nested_pipeline
         return [] unless nested_pipeline
 
-        task = @stage_ctx.stage.task
+        task = stage.respond_to?(:task) ? stage.task : nil
         return [] unless task
 
         # Get all nested stages and their queues
@@ -580,6 +582,10 @@ module Minigun
           queue = task.find_queue(nested_stage)
           { stage: nested_stage, queue: queue } if queue
         end.compact
+      rescue => e
+        # If anything goes wrong, just skip nested queue monitoring
+        Minigun.logger.debug "[IPC] Could not get nested stage queues: #{e.message}"
+        []
       end
 
       # Start threads to monitor nested stages' queues

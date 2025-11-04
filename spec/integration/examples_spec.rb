@@ -2002,6 +2002,48 @@ RSpec.describe 'Examples Integration' do
     end
   end
 
+  describe '98_await_stages_complex_routing.rb' do
+    it 'demonstrates complex multi-level routing with await stages' do
+      load File.expand_path('../../examples/98_await_stages_complex_routing.rb', __dir__)
+
+      # Test 1: Multi-level routing
+      example1 = ComplexAwaitRoutingExample.new
+      example1.run
+
+      # Verify item distribution
+      expect(example1.high_priority.size).to eq(10)
+      expect(example1.low_priority.size).to eq(5)
+      expect(example1.errors.size).to eq(5)
+
+      # Verify enrichment chain for high priority items
+      expect(example1.high_priority).to all(satisfy { |item| item[:validated] && item[:enriched] })
+
+      # Verify low priority items are processed
+      expect(example1.low_priority).to all(satisfy { |item| item[:processed] })
+
+      # Verify errors are handled
+      expect(example1.errors).to all(satisfy { |item| item[:error] })
+
+      example1.cleanup
+
+      # Test 2: IPC fork with await stages
+      example2 = AwaitWithIpcExample.new
+      example2.run
+
+      expect(example2.results.size).to eq(10)
+
+      by_worker = example2.results.group_by { |r| r[:worker] }
+      expect(by_worker[:a].size).to eq(5)
+      expect(by_worker[:b].size).to eq(5)
+
+      # Verify workers ran in different PIDs
+      pids = example2.results.map { |r| r[:pid] }.uniq
+      expect(pids.size).to be > 1
+
+      example2.cleanup
+    end
+  end
+
   # Coverage check: ensure all example files have tests
   describe 'Example Coverage' do
     it 'has tests for all example files' do
