@@ -86,25 +86,22 @@ class DynamicRoutingToInnerIpcExample
     end
 
     # Separate collectors for A and B paths
-    consumer :collect_a do |item|
-      if item[:processed_by] == 'A'
-        puts "[CollectA] Received from A: #{item[:id]} = #{item[:value]}"
-        File.open(@results_a_file, 'a') do |f|
-          f.flock(File::LOCK_EX)
-          f.puts "#{item[:id]}:#{item[:value]}"
-          f.flock(File::LOCK_UN)
-        end
+    # Use from: to explicitly connect to the IPC fork stages
+    consumer :collect_a, from: :inner_process_a do |item|
+      puts "[CollectA] Received from A: #{item[:id]} = #{item[:value]}"
+      File.open(@results_a_file, 'a') do |f|
+        f.flock(File::LOCK_EX)
+        f.puts "#{item[:id]}:#{item[:value]}"
+        f.flock(File::LOCK_UN)
       end
     end
 
-    consumer :collect_b do |item|
-      if item[:processed_by] == 'B'
-        puts "[CollectB] Received from B: #{item[:id]} = #{item[:value]}"
-        File.open(@results_b_file, 'a') do |f|
-          f.flock(File::LOCK_EX)
-          f.puts "#{item[:id]}:#{item[:value]}"
-          f.flock(File::LOCK_UN)
-        end
+    consumer :collect_b, from: :inner_process_b do |item|
+      puts "[CollectB] Received from B: #{item[:id]} = #{item[:value]}"
+      File.open(@results_b_file, 'a') do |f|
+        f.flock(File::LOCK_EX)
+        f.puts "#{item[:id]}:#{item[:value]}"
+        f.flock(File::LOCK_UN)
       end
     end
 
@@ -189,7 +186,7 @@ class DynamicRoutingFromInnerToInnerExample
       end
     end
 
-    consumer :collect do |item|
+    consumer :collect, from: [:cow_process_x, :cow_process_y] do |item|
       puts "[Collect] Received: #{item[:id]} = #{item[:value]} via path #{item[:path]}"
       File.open(@results_file, 'a') do |f|
         f.flock(File::LOCK_EX)

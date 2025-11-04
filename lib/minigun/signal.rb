@@ -40,4 +40,19 @@ module Minigun
       "EndOfStage(#{@stage.name})"
     end
   end
+
+  # Wrapper for items that carry routing metadata
+  # Used in IPC fork contexts to route items to specific nested stages
+  class RoutedItem
+    attr_reader :target_stage, :item
+
+    def initialize(target_stage, item)
+      @target_stage = target_stage
+      @item = item
+    end
+
+    def to_s
+      "RoutedItem(target=#{@target_stage}, item=#{@item})"
+    end
+  end
 end

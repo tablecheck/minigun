@@ -414,6 +414,19 @@ module Minigun
           next
         end
 
+        # Handle routed items from IPC dynamic routing
+        if item.is_a?(Minigun::RoutedItem)
+          # Route to specific target stage only
+          target = @targets.find { |t| t.name == item.target_stage }
+          if target
+            queue = task&.find_queue(target)
+            queue&.<< item.item
+          else
+            Minigun.logger.warn "[RouterBroadcast] Unknown routed target: #{item.target_stage}"
+          end
+          next
+        end
+
         # Broadcast to all downstream stages (fan-out semantics)
         @targets.each do |target|
           queue = task&.find_queue(target)
@@ -440,6 +453,19 @@ module Minigun
           worker_ctx.sources_done << item.stage
           break if worker_ctx.sources_done == worker_ctx.sources_expected
 
+          next
+        end
+
+        # Handle routed items from IPC dynamic routing
+        if item.is_a?(Minigun::RoutedItem)
+          # Route to specific target stage only
+          target = @targets.find { |t| t.name == item.target_stage }
+          if target
+            queue = task&.find_queue(target)
+            queue&.<< item.item
+          else
+            Minigun.logger.warn "[RouterRoundRobin] Unknown routed target: #{item.target_stage}"
+          end
           next
         end
 

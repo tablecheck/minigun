@@ -130,6 +130,9 @@ module Minigun
         case message[:type]
         when :item
           return message[:item]
+        when :routed_item
+          # Item targeted at specific nested stage - return with routing metadata
+          return RoutedItem.new(message[:target_stage], message[:item])
         when :end_of_stage, :shutdown
           return EndOfStage.new(@stage)
         end

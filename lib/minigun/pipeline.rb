@@ -518,6 +518,10 @@ module Minigun
           # Skip autonomous stages
           next if candidate.run_mode == :autonomous
 
+          # Skip stages with await: true - they're dynamic routing targets
+          # and shouldn't be auto-connected
+          next if candidate.options[:await] == true
+
           # Found a valid non-producer stage
           next_stage = candidate
           break
@@ -525,6 +529,10 @@ module Minigun
 
         # No valid next stage found
         next unless next_stage
+
+        # Skip if current stage has await: true - it shouldn't connect to anything
+        # (it's a dynamic routing target that only receives via output.to())
+        next if stage.options[:await] == true
 
         # Skip if BOTH current and next are composite stages (isolated pipelines)
         next if stage.run_mode == :composite && next_stage.run_mode == :composite

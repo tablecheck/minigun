@@ -1981,20 +1981,23 @@ RSpec.describe 'Examples Integration' do
     it 'demonstrates dynamic routing to stages inside fork blocks' do
       load File.expand_path('../../examples/97_dynamic_routing_to_inner_fork_stages.rb', __dir__)
 
-      # NOTE: This example has routing logic issues
-      # All items are going to results_c instead of being split
+      # Routing from thread to inner IPC/COW stages
       example1 = DynamicRoutingToInnerIpcExample.new
       example1.run
-      # TODO: Fix routing logic - currently all items go to results_c
-      expect(example1.results_c.size).to eq(9) # Should be 3
+      # Items should be split: 3 to A (IDs % 3 == 0), 3 to B (% 3 == 1), 3 to C (% 3 == 2)
+      expect(example1.results_a.size).to eq(3)
+      expect(example1.results_b.size).to eq(3)
+      expect(example1.results_c.size).to eq(3)
       example1.cleanup
 
-      # All items go to path Y instead of splitting even/odd
+      # Routing from inner IPC to inner COW stages (even/odd split)
       example2 = DynamicRoutingFromInnerToInnerExample.new
       example2.run
       expect(example2.results.size).to eq(6)
-      # TODO: Fix routing logic - currently all go to path Y
-      expect(example2.results.all? { |r| r[:path] == 'Y' }).to be true
+      # Items should be split between paths X (even IDs) and Y (odd IDs)
+      by_path = example2.results.group_by { |r| r[:path] }
+      expect(by_path['X'].size).to eq(3)
+      expect(by_path['Y'].size).to eq(3)
       example2.cleanup
     end
   end

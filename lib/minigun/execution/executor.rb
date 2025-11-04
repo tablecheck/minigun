@@ -502,6 +502,9 @@ module Minigun
         result_threads = []
         received_end_of_stage = nil
 
+        # Get nested stages' queues for dynamic routing support
+        nested_queues = get_nested_stage_queues
+
         # Start result collection threads for each worker
         @workers.each do |worker|
           result_threads << Thread.new do
@@ -514,6 +517,9 @@ module Minigun
             end
           end
         end
+
+        # Start threads to monitor nested stages' queues and forward to workers
+        nested_queue_threads = start_nested_queue_monitors(nested_queues)
 
         # Distribute items to workers round-robin
         begin
@@ -551,8 +557,64 @@ module Minigun
             end
           end
         ensure
+          # Stop nested queue monitor threads
+          nested_queue_threads&.each { |t| t.kill }
           # Wait for all result collection threads to finish
           result_threads.each(&:join)
+        end
+      end
+
+      # Get queues for nested stages (for dynamic routing support)
+      def get_nested_stage_queues
+        stage = @stage_ctx.stage
+        return [] unless stage.is_a?(Minigun::PipelineStage)
+
+        nested_pipeline = stage.nested_pipeline
+        return [] unless nested_pipeline
+
+        task = @stage_ctx.stage.task
+        return [] unless task
+
+        # Get all nested stages and their queues
+        nested_pipeline.instance_variable_get(:@stages).map do |nested_stage|
+          queue = task.find_queue(nested_stage)
+          { stage: nested_stage, queue: queue } if queue
+        end.compact
+      end
+
+      # Start threads to monitor nested stages' queues
+      def start_nested_queue_monitors(nested_queues)
+        return [] if nested_queues.empty?
+
+        worker_index_ref = { value: 0 }  # Use ref to share across threads
+        nested_queues.map do |nested_info|
+          Thread.new do
+            loop do
+              # Non-blocking check for items in nested queue
+              begin
+                item = nested_info[:queue].pop(true)  # non_block = true
+
+                # Send item to worker with routing metadata
+                worker_idx = worker_index_ref[:value]
+                worker_index_ref[:value] = (worker_idx + 1) % @workers.size
+                worker = @workers[worker_idx]
+
+                Marshal.dump({
+                  type: :routed_item,
+                  target_stage: nested_info[:stage].name,
+                  item: item
+                }, worker[:to_worker])
+                worker[:to_worker].flush
+              rescue ThreadError
+                # Queue empty, sleep briefly
+                sleep 0.01
+              rescue => e
+                # Log but don't crash the monitor thread
+                Minigun.logger.debug "[IPC] Nested queue monitor error: #{e.message}"
+                sleep 0.1
+              end
+            end
+          end
         end
       end
     end
