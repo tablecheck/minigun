@@ -497,11 +497,14 @@ RSpec.describe Minigun::Execution::CowForkPoolExecutor, skip: !Minigun.fork? do
 end
 
 RSpec.describe Minigun::Execution::IpcForkPoolExecutor, skip: !Minigun.fork? do
+  let(:mock_stage_registry) { double('stage_registry', register: nil) }
+  let(:mock_task) { double('task', register_ipc_pipes: nil, unregister_ipc_pipes: nil, close_all_ipc_pipes_except: nil, stage_registry: mock_stage_registry) }
+  let(:mock_stage) { double('stage', task: mock_task) }
   let(:stage_ctx) do
     dag = double('dag', terminal?: false)
     pipeline = double('pipeline', name: 'test_pipeline', dag: dag, send: nil)
     stage_stats = double('stage_stats', start!: nil, start_time: nil, increment_consumed: nil, increment_produced: nil, record_latency: nil)
-    double('stage_ctx', pipeline: pipeline, root_pipeline: pipeline, stage_name: :test, stage_stats: stage_stats, dag: dag)
+    double('stage_ctx', pipeline: pipeline, root_pipeline: pipeline, stage_name: :test, stage_stats: stage_stats, dag: dag, stage: mock_stage)
   end
   let(:executor) { described_class.new(stage_ctx, max_size: 2) }
 
@@ -512,7 +515,7 @@ RSpec.describe Minigun::Execution::IpcForkPoolExecutor, skip: !Minigun.fork? do
   end
 
   describe '#execute_stage' do
-    let(:mock_pipeline) { instance_double(Minigun::Pipeline, name: 'test_pipeline') }
+    let(:mock_pipeline) { instance_double(Minigun::Pipeline, name: 'test_pipeline', task: mock_task) }
     let(:stage_stats) { Minigun::Stats.new(:test) }
     let(:user_context) { {} }
 

@@ -413,11 +413,9 @@ module Minigun
           @workers.clear
 
           # Unregister pipes from task tracking
-          if !@my_pipes.empty?
-            task = @stage_ctx.stage.task
-            task&.unregister_ipc_pipes(@my_pipes)
-            @my_pipes.clear
-          end
+          task = @stage_ctx.stage.task
+          task.unregister_ipc_pipes(@my_pipes)
+          @my_pipes.clear
         end
       end
 
@@ -436,7 +434,7 @@ module Minigun
           # This prevents FD leaks when multiple IPC stages run concurrently
           task = stage.task
           pipes = [parent_read, child_write, child_read, parent_write]
-          task&.register_ipc_pipes(pipes)
+          task.register_ipc_pipes(pipes)
           @my_pipes.concat(pipes)
 
           pid = fork do
@@ -446,7 +444,7 @@ module Minigun
 
             # Close ALL IPC pipes from ALL stages EXCEPT our own pipes
             # This prevents FD leaks when multiple IPC stages run concurrently
-            task&.close_all_ipc_pipes_except([child_read, child_write])
+            task.close_all_ipc_pipes_except([child_read, child_write])
 
             worker_loop(stage, user_context, stage_stats, child_read, child_write, pipeline)
           end
