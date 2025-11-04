@@ -3,7 +3,9 @@
 require 'spec_helper'
 
 RSpec.describe Minigun::Execution::Executor do
-  let(:mock_pipeline) { instance_double(Minigun::Pipeline, name: 'test_pipeline') }
+  let(:task) { Minigun::Task.new }
+  let(:dag) { double('dag', terminal?: false) }
+  let(:pipeline) { Minigun::Pipeline.new('test_pipeline', task, nil, dag: dag) }
 
   # Helper to create a mock stage_ctx
   let(:mock_stage_ctx) do
@@ -414,7 +416,7 @@ RSpec.describe Minigun::Execution::CowForkPoolExecutor, skip: !Minigun.fork? do
   end
 
   describe '#execute_stage' do
-    let(:mock_pipeline) { instance_double(Minigun::Pipeline, name: 'test_pipeline') }
+    let(:pipeline) { instance_double(Minigun::Pipeline, name: 'test_pipeline') }
     let(:stage_stats) { Minigun::Stats.new(:test) }
     let(:user_context) { {} }
 
@@ -422,7 +424,7 @@ RSpec.describe Minigun::Execution::CowForkPoolExecutor, skip: !Minigun.fork? do
       # Use real ConsumerStage - RSpec mocks don't work across forks
       stage = Minigun::ConsumerStage.new(
         :test,
-        mock_pipeline,
+        pipeline,
         proc { |item, output| output << (item * 2) },
         {}
       )
@@ -442,7 +444,7 @@ RSpec.describe Minigun::Execution::CowForkPoolExecutor, skip: !Minigun.fork? do
       # Use real ConsumerStage that raises an error
       stage = Minigun::ConsumerStage.new(
         :test,
-        mock_pipeline,
+        pipeline,
         proc { |_item, _output| raise 'boom' },
         {}
       )
@@ -464,7 +466,7 @@ RSpec.describe Minigun::Execution::CowForkPoolExecutor, skip: !Minigun.fork? do
       # Real stage that tracks which items it processes
       stage = Minigun::ConsumerStage.new(
         :test,
-        mock_pipeline,
+        pipeline,
         proc { |item, output|
           processed_items << item
           sleep 0.01  # Slow processing
@@ -515,7 +517,7 @@ RSpec.describe Minigun::Execution::IpcForkPoolExecutor, skip: !Minigun.fork? do
   end
 
   describe '#execute_stage' do
-    let(:mock_pipeline) { instance_double(Minigun::Pipeline, name: 'test_pipeline', task: mock_task) }
+    let(:pipeline) { instance_double(Minigun::Pipeline, name: 'test_pipeline', task: mock_task) }
     let(:stage_stats) { Minigun::Stats.new(:test) }
     let(:user_context) { {} }
 
@@ -523,7 +525,7 @@ RSpec.describe Minigun::Execution::IpcForkPoolExecutor, skip: !Minigun.fork? do
       # Use real ConsumerStage - RSpec mocks don't work across forks
       stage = Minigun::ConsumerStage.new(
         :test,
-        mock_pipeline,
+        pipeline,
         proc { |item, output| output << (item * 2) },
         {}
       )
@@ -550,7 +552,7 @@ RSpec.describe Minigun::Execution::IpcForkPoolExecutor, skip: !Minigun.fork? do
       # Real stage that processes items
       stage = Minigun::ConsumerStage.new(
         :test,
-        mock_pipeline,
+        pipeline,
         proc { |item, output|
           sleep 0.01  # Slow processing
           output << item
@@ -577,7 +579,7 @@ RSpec.describe Minigun::Execution::IpcForkPoolExecutor, skip: !Minigun.fork? do
       # Test that IPC workers are persistent and process multiple items
       stage = Minigun::ConsumerStage.new(
         :test,
-        mock_pipeline,
+        pipeline,
         proc { |item, output| output << item },
         {}
       )

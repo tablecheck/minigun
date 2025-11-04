@@ -2003,7 +2003,7 @@ RSpec.describe 'Examples Integration' do
   end
 
   describe '98_await_stages_complex_routing.rb' do
-    it 'demonstrates complex multi-level routing with await stages' do
+    it 'demonstrates complex multi-level routing with await stages', skip: !Minigun.fork? do
       load File.expand_path('../../examples/98_await_stages_complex_routing.rb', __dir__)
 
       # Test 1: Multi-level routing

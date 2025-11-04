@@ -59,7 +59,6 @@ module Minigun
     end
 
     def task
-      return unless @pipeline&.respond_to?(:task)
       @pipeline.task
     end
 
