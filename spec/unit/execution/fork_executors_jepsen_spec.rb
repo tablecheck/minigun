@@ -631,6 +631,341 @@ RSpec.describe 'Fork Executors - Jepsen-style Tests', skip: !Minigun.fork? do
     end
   end
 
+  # IPC-specific File Descriptor Leak Tests
+  describe 'IPC Fork Pool Executor', executor_type: :ipc_fork do
+    let(:pool_size) { 2 }
+    let(:executor) { Minigun::Execution.create_executor(:ipc_fork, stage_ctx, max_size: pool_size) }
+
+    describe 'File Descriptor Management' do
+      it 'cleans up file descriptors after processing' do
+        items = (1..20).to_a
+        input_queue = Queue.new
+        output_queue = Queue.new
+
+        items.each { |i| input_queue << i }
+        input_queue << Minigun::EndOfStage.new('test')
+
+        # Get initial FD count
+        initial_fd_count = count_open_fds
+
+        stage = create_stage(name: 'fd_test_1')
+        executor.execute_stage(stage, {}, input_queue, output_queue)
+
+        results = []
+        results << output_queue.pop until output_queue.empty?
+
+        executor.shutdown
+
+        # Give OS time to clean up
+        sleep 0.1
+
+        # Check FD count hasn't grown significantly
+        final_fd_count = count_open_fds
+        fd_leak = final_fd_count - initial_fd_count
+
+        # Allow for some variance but fail if we leaked many FDs
+        expect(fd_leak).to be <= 5, "Leaked #{fd_leak} file descriptors"
+      end
+
+      it 'handles multiple sequential stage executions without FD leaks' do
+        initial_fd_count = count_open_fds
+
+        3.times do |round|
+          items = (1..10).to_a
+          input_queue = Queue.new
+          output_queue = Queue.new
+
+          items.each { |i| input_queue << i }
+          input_queue << Minigun::EndOfStage.new('test')
+
+          stage = create_stage(name: "fd_test_seq_#{round}")
+          executor_instance = Minigun::Execution.create_executor(:ipc_fork, stage_ctx, max_size: 2)
+          executor_instance.execute_stage(stage, {}, input_queue, output_queue)
+
+          results = []
+          results << output_queue.pop until output_queue.empty?
+
+          executor_instance.shutdown
+          sleep 0.05
+        end
+
+        final_fd_count = count_open_fds
+        fd_leak = final_fd_count - initial_fd_count
+
+        expect(fd_leak).to be <= 10, "Leaked #{fd_leak} file descriptors across sequential executions"
+      end
+
+      it 'properly closes worker pipes when workers exit' do
+        items = (1..5).to_a
+        input_queue = Queue.new
+        output_queue = Queue.new
+
+        items.each { |i| input_queue << i }
+        input_queue << Minigun::EndOfStage.new('test')
+
+        stage = create_stage(name: 'pipe_close_test')
+
+        # Track pipe FDs before execution
+        fds_before = Dir.glob('/proc/self/fd/*').count
+
+        executor.execute_stage(stage, {}, input_queue, output_queue)
+
+        results = []
+        results << output_queue.pop until output_queue.empty?
+
+        executor.shutdown
+        sleep 0.1
+
+        # Check that pipes were cleaned up
+        fds_after = Dir.glob('/proc/self/fd/*').count
+        fd_growth = fds_after - fds_before
+
+        expect(fd_growth).to be <= 3, "Pipe FDs not properly closed: #{fd_growth} extra FDs"
+      end
+
+      it 'prevents FD inheritance across multiple IPC stages in same task' do
+        # This test simulates what happens in multi-stage pipelines
+        # Each stage should clean up FDs from other stages
+
+        task_for_test = Minigun::Task.new
+        pipeline_for_test = task_for_test.root_pipeline
+
+        stage_ctx_1 = Struct.new(:stage_stats, :pipeline, :root_pipeline, :stage).new(
+          stage_stats, pipeline_for_test, pipeline_for_test,
+          double('Stage', name: 'test_stage_1', task: task_for_test)
+        )
+        stage_ctx_2 = Struct.new(:stage_stats, :pipeline, :root_pipeline, :stage).new(
+          stage_stats, pipeline_for_test, pipeline_for_test,
+          double('Stage', name: 'test_stage_2', task: task_for_test)
+        )
+
+        # Create two separate IPC executors sharing same task
+        executor1 = Minigun::Execution.create_executor(:ipc_fork, stage_ctx_1, max_size: 2)
+        executor2 = Minigun::Execution.create_executor(:ipc_fork, stage_ctx_2, max_size: 2)
+
+        # Execute stage 1
+        items1 = (1..5).to_a
+        input_queue1 = Queue.new
+        output_queue1 = Queue.new
+        items1.each { |i| input_queue1 << i }
+        input_queue1 << Minigun::EndOfStage.new('test')
+
+        stage1 = Minigun::ConsumerStage.new(
+          :multi_stage_test_1,
+          pipeline_for_test,
+          proc { |item, output| output << (item * 2) },
+          {}
+        )
+
+        executor1.execute_stage(stage1, {}, input_queue1, output_queue1)
+        results1 = []
+        results1 << output_queue1.pop until output_queue1.empty?
+
+        # Execute stage 2 - workers here should not inherit stage 1's pipes
+        items2 = (1..5).to_a
+        input_queue2 = Queue.new
+        output_queue2 = Queue.new
+        items2.each { |i| input_queue2 << i }
+        input_queue2 << Minigun::EndOfStage.new('test')
+
+        stage2 = Minigun::ConsumerStage.new(
+          :multi_stage_test_2,
+          pipeline_for_test,
+          proc { |item, output| output << (item * 3) },
+          {}
+        )
+
+        # This should not hang due to FD leaks
+        executor2.execute_stage(stage2, {}, input_queue2, output_queue2)
+        results2 = []
+        results2 << output_queue2.pop until output_queue2.empty?
+
+        executor1.shutdown
+        executor2.shutdown
+
+        # Verify both stages processed correctly
+        expect(results1.sort).to eq(items1.map { |x| x * 2 }.sort)
+        expect(results2.sort).to eq(items2.map { |x| x * 3 }.sort)
+      end
+    end
+
+    describe 'Stress Tests' do
+      it 'handles very large item counts without hanging' do
+        items = (1..1000).to_a
+        input_queue = Queue.new
+        output_queue = Queue.new
+
+        items.each { |i| input_queue << i }
+        input_queue << Minigun::EndOfStage.new('test')
+
+        stage = create_stage(name: 'large_count_test')
+
+        # Should complete in reasonable time
+        Timeout.timeout(10) do
+          executor.execute_stage(stage, {}, input_queue, output_queue)
+        end
+
+        results = []
+        results << output_queue.pop until output_queue.empty?
+
+        expect(results.size).to eq(1000)
+      end
+
+      it 'handles rapid worker recycling' do
+        # Send many small batches to force workers to process multiple items
+        total_items = 200
+        items = (1..total_items).to_a
+        input_queue = Queue.new
+        output_queue = Queue.new
+
+        items.each { |i| input_queue << i }
+        input_queue << Minigun::EndOfStage.new('test')
+
+        stage = create_stage(
+          name: 'rapid_recycling_test',
+          processor: ->(item, output) {
+            # Simulate variable processing time
+            sleep(rand * 0.001)
+            output << (item * 2)
+          }
+        )
+
+        executor.execute_stage(stage, {}, input_queue, output_queue)
+
+        results = []
+        results << output_queue.pop until output_queue.empty?
+
+        verify_exactly_once(items, results)
+      end
+
+      it 'handles concurrent pipeline execution without interference' do
+        # Create multiple independent tasks/executors running in parallel
+        threads = 3.times.map do |thread_id|
+          Thread.new do
+            local_task = Minigun::Task.new
+            local_pipeline = local_task.root_pipeline
+            local_stage_ctx = Struct.new(:stage_stats, :pipeline, :root_pipeline, :stage).new(
+              stage_stats, local_pipeline, local_pipeline,
+              double('Stage', name: "test_stage_#{thread_id}", task: local_task)
+            )
+
+            local_executor = Minigun::Execution.create_executor(:ipc_fork, local_stage_ctx, max_size: 2)
+
+            items = (1..20).to_a
+            input_queue = Queue.new
+            output_queue = Queue.new
+
+            items.each { |i| input_queue << i }
+            input_queue << Minigun::EndOfStage.new('test')
+
+            stage = Minigun::ConsumerStage.new(
+              "concurrent_test_#{thread_id}".to_sym,
+              local_pipeline,
+              proc { |item, output| output << (item * 2) },
+              {}
+            )
+
+            local_executor.execute_stage(stage, {}, input_queue, output_queue)
+
+            results = []
+            results << output_queue.pop until output_queue.empty?
+
+            local_executor.shutdown
+
+            results
+          end
+        end
+
+        all_results = threads.map(&:value)
+
+        # Each thread should have processed all its items
+        all_results.each do |results|
+          expect(results.size).to eq(20)
+        end
+      end
+    end
+
+    describe 'Edge Cases' do
+      it 'handles stage that closes output queue early' do
+        items = (1..10).to_a
+        input_queue = Queue.new
+        output_queue = Queue.new
+
+        items.each { |i| input_queue << i }
+        input_queue << Minigun::EndOfStage.new('test')
+
+        stage = create_stage(
+          name: 'early_close_test',
+          processor: ->(item, output) {
+            # Only process first 5 items
+            output << (item * 2) if item <= 5
+          }
+        )
+
+        executor.execute_stage(stage, {}, input_queue, output_queue)
+
+        results = []
+        results << output_queue.pop until output_queue.empty?
+
+        expect(results.size).to eq(5)
+      end
+
+      it 'handles empty pipeline with only EndOfStage signal' do
+        input_queue = Queue.new
+        output_queue = Queue.new
+
+        input_queue << Minigun::EndOfStage.new('test')
+
+        stage = create_stage(name: 'empty_pipeline_test')
+
+        # Should not hang
+        Timeout.timeout(2) do
+          executor.execute_stage(stage, {}, input_queue, output_queue)
+        end
+
+        expect(output_queue.empty?).to be true
+      end
+
+      it 'handles items that take very long to process' do
+        items = [1, 2, 3]
+        input_queue = Queue.new
+        output_queue = Queue.new
+
+        items.each { |i| input_queue << i }
+        input_queue << Minigun::EndOfStage.new('test')
+
+        stage = create_stage(
+          name: 'slow_process_test',
+          processor: ->(item, output) {
+            sleep 0.2  # Slow processing
+            output << (item * 2)
+          }
+        )
+
+        # Should complete despite slow processing
+        Timeout.timeout(5) do
+          executor.execute_stage(stage, {}, input_queue, output_queue)
+        end
+
+        results = []
+        results << output_queue.pop until output_queue.empty?
+
+        verify_exactly_once(items, results)
+      end
+    end
+  end
+
+  # Helper method to count open file descriptors
+  def count_open_fds
+    # Count open file descriptors in /proc/self/fd
+    begin
+      Dir.glob('/proc/self/fd/*').count
+    rescue
+      # Fallback for systems without /proc
+      `lsof -p #{Process.pid} 2>/dev/null | wc -l`.to_i
+    end
+  end
+
   # Helper method to count child processes
   def process_children_count
     # Get count of child processes for current process
