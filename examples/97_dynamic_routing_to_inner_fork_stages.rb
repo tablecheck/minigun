@@ -53,16 +53,18 @@ class DynamicRoutingToInnerIpcExample
 
     # IPC fork context with TWO inner stages
     # These stages are INSIDE the ipc_fork block and can be targeted with output.to()
+    # IMPORTANT: await: true is required since these stages have no upstream DAG connections
+    # within the fork block, but receive items via dynamic routing from outside
     ipc_fork(2) do
       # Inner stage A - processes subset of items
-      processor :inner_process_a do |item, output|
+      processor :inner_process_a, await: true do |item, output|
         result = item.merge(value: item[:value] * 10, processed_by: 'A')
         puts "[InnerProcessA:ipc_fork] #{item[:id]}: #{item[:value]} * 10 = #{result[:value]} (PID #{Process.pid})"
         output << result
       end
 
       # Inner stage B - processes another subset
-      processor :inner_process_b do |item, output|
+      processor :inner_process_b, await: true do |item, output|
         result = item.merge(value: item[:value] * 20, processed_by: 'B')
         puts "[InnerProcessB:ipc_fork] #{item[:id]}: #{item[:value]} * 20 = #{result[:value]} (PID #{Process.pid})"
         output << result
@@ -70,9 +72,10 @@ class DynamicRoutingToInnerIpcExample
     end
 
     # COW fork with inner consumer
+    # IMPORTANT: await: true required for disconnected stages receiving dynamic routing
     cow_fork(2) do
       # Inner stage C - collects its own subset
-      consumer :inner_collect_c do |item|
+      consumer :inner_collect_c, await: true do |item|
         puts "[InnerCollectC:cow_fork] #{item[:id]} = #{item[:value]} (PID #{Process.pid})"
         File.open(@results_c_file, 'a') do |f|
           f.flock(File::LOCK_EX)
@@ -171,14 +174,15 @@ class DynamicRoutingFromInnerToInnerExample
     end
 
     # COW fork with two inner stages that receive from IPC inner router
+    # IMPORTANT: await: true required for disconnected stages receiving dynamic routing
     cow_fork(2) do
-      processor :cow_process_x do |item, output|
+      processor :cow_process_x, await: true do |item, output|
         result = item.merge(value: item[:value] * 100, path: 'X')
         puts "[CowProcessX:cow] #{item[:id]}: #{item[:value]} * 100 = #{result[:value]} (PID #{Process.pid})"
         output << result
       end
 
-      processor :cow_process_y do |item, output|
+      processor :cow_process_y, await: true do |item, output|
         result = item.merge(value: item[:value] * 200, path: 'Y')
         puts "[CowProcessY:cow] #{item[:id]}: #{item[:value]} * 200 = #{result[:value]} (PID #{Process.pid})"
         output << result
@@ -247,7 +251,7 @@ if __FILE__ == $PROGRAM_NAME
     puts "  - Can route from thread to inner COW stage"
     puts "  - Can route from inner IPC stage to inner COW stage"
     puts "  - Routing respects executor boundaries and serialization"
-    puts "  - Inner stages await items automatically (no await: true needed)"
+    puts "  - IMPORTANT: Inner stages with no DAG upstream need await: true"
     puts "=" * 80
   rescue NotImplementedError => e
     puts "\nForking not available on this platform: #{e.message}"
