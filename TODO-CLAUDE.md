@@ -31,7 +31,9 @@ Minigun is a high-performance data processing pipeline framework for Ruby with s
     - [ ] routing with multiple forked processes - round-robin via IPC workers
     - [ ] start of IPC/COW stage should not require await - added await: true option
   - [ ] :worker_finished event seems like it should not work like it does. It resends back into the master... hmmm
-  - [ ] Transmit 
+  - [ ] Transmit stats across forks
+  - [ ] Transmit logs across forks--look at Puma
+  - [ ] Support MINIGUN_LOG_LEVEL var
 
 ### Phase 1.1: QoL Improvements
 

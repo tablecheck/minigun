@@ -140,9 +140,6 @@ module Minigun
           else
             output_queue << result # Fallback if no routing context
           end
-        when :worker_finished
-          # Worker is done - raise EOFError to exit result thread loop
-          raise EOFError, "Worker finished"
         when :error
           error_msg = response[:error] || "Unknown error in forked process"
           backtrace = response[:backtrace]
@@ -357,6 +354,7 @@ module Minigun
       def initialize(stage_ctx, max_size:)
         super(stage_ctx, max_size: max_size)
         @workers = []
+        @my_pipes = []  # Track this executor's pipes for cleanup/unregister
       end
 
       def execute_stage(stage, user_context, input_queue, output_queue)
@@ -413,6 +411,13 @@ module Minigun
             end
           end
           @workers.clear
+
+          # Unregister pipes from task tracking
+          if !@my_pipes.empty?
+            task = @stage_ctx.stage.task
+            task&.unregister_ipc_pipes(@my_pipes)
+            @my_pipes.clear
+          end
         end
       end
 
@@ -427,17 +432,21 @@ module Minigun
           parent_read, child_write = IO.pipe
           child_read, parent_write = IO.pipe
 
+          # Register pipes with task to track across all IPC stages
+          # This prevents FD leaks when multiple IPC stages run concurrently
+          task = stage.task
+          pipes = [parent_read, child_write, child_read, parent_write]
+          task&.register_ipc_pipes(pipes)
+          @my_pipes.concat(pipes)
+
           pid = fork do
             # Worker process - close parent ends
             parent_read.close
             parent_write.close
 
-            # IMPORTANT: Close other workers' pipes to avoid keeping them open
-            # This ensures EOF propagates correctly when each worker finishes
-            @workers.each do |w|
-              w[:to_worker].close rescue nil
-              w[:from_worker].close rescue nil
-            end
+            # Close ALL IPC pipes from ALL stages EXCEPT our own pipes
+            # This prevents FD leaks when multiple IPC stages run concurrently
+            task&.close_all_ipc_pipes_except([child_read, child_write])
 
             worker_loop(stage, user_context, stage_stats, child_read, child_write, pipeline)
           end
@@ -485,13 +494,7 @@ module Minigun
       rescue EOFError, IOError
         # Parent closed pipe, exit gracefully
       ensure
-        begin
-          # Send explicit end_of_stage message so parent knows we're done
-          Marshal.dump({ type: :worker_finished }, to_parent)
-          to_parent.flush
-        rescue
-          # Pipe might be broken, ignore
-        end
+        # Close pipes - EOF will naturally signal parent that worker is done
         from_parent.close rescue nil
         to_parent.close rescue nil
         exit! 0
