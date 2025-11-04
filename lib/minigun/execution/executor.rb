@@ -140,6 +140,9 @@ module Minigun
           else
             output_queue << result # Fallback if no routing context
           end
+        when :worker_finished
+          # Worker is done - raise EOFError to exit result thread loop
+          raise EOFError, "Worker finished"
         when :error
           error_msg = response[:error] || "Unknown error in forked process"
           backtrace = response[:backtrace]
@@ -429,6 +432,13 @@ module Minigun
             parent_read.close
             parent_write.close
 
+            # IMPORTANT: Close other workers' pipes to avoid keeping them open
+            # This ensures EOF propagates correctly when each worker finishes
+            @workers.each do |w|
+              w[:to_worker].close rescue nil
+              w[:from_worker].close rescue nil
+            end
+
             worker_loop(stage, user_context, stage_stats, child_read, child_write, pipeline)
           end
 
@@ -475,6 +485,13 @@ module Minigun
       rescue EOFError, IOError
         # Parent closed pipe, exit gracefully
       ensure
+        begin
+          # Send explicit end_of_stage message so parent knows we're done
+          Marshal.dump({ type: :worker_finished }, to_parent)
+          to_parent.flush
+        rescue
+          # Pipe might be broken, ignore
+        end
         from_parent.close rescue nil
         to_parent.close rescue nil
         exit! 0
@@ -492,10 +509,8 @@ module Minigun
               loop do
                 read_result_from_pipe(worker[:from_worker], output_queue, @stage_ctx)
               end
-            rescue EOFError, IOError => e
-              # Worker closed pipe, done (suppress warnings for normal EOF)
-              # Only warn if it's not a normal EOF
-              warn "[Minigun] Worker #{worker[:pid]} pipe closed: #{e.message}" unless e.is_a?(EOFError)
+            rescue EOFError, IOError
+              # Worker closed pipe, done
             end
           end
         end
@@ -512,7 +527,7 @@ module Minigun
                 begin
                   Marshal.dump({ type: :end_of_stage }, worker[:to_worker])
                   worker[:to_worker].flush
-                rescue IOError, EOFError
+                rescue IOError, EOFError, Errno::EPIPE
                   # Worker already closed, ignore
                 end
               end
@@ -537,8 +552,6 @@ module Minigun
           end
         ensure
           # Wait for all result collection threads to finish
-          # Workers send EndOfStage back via IPC when they finish, so result threads
-          # will naturally collect and propagate it to output_queue
           result_threads.each(&:join)
         end
       end

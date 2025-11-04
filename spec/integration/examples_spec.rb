@@ -1872,6 +1872,94 @@ RSpec.describe 'Examples Integration' do
     end
   end
 
+  describe '92_reroute_ipc_basic.rb' do
+    it 'demonstrates rerouting with IPC fork executors' do
+      load File.expand_path('../../examples/92_reroute_ipc_basic.rb', __dir__)
+
+      # All three test cases should pass
+      base = RerouteIpcBasicExample.new
+      base.run
+      expect(base.results.map { |r| r[:value] }.sort).to eq([2, 4, 6, 8, 10])
+
+      skip_example = RerouteIpcSkipExample.new
+      skip_example.run
+      expect(skip_example.results.map { |r| r[:value] }.sort).to eq([1, 2, 3, 4, 5])
+
+      insert_example = RerouteIpcInsertExample.new
+      insert_example.run
+      expect(insert_example.results.map { |r| r[:value] }.sort).to eq([6, 12, 18, 24, 30])
+    end
+  end
+
+  describe '93_reroute_cow_basic.rb' do
+    it 'demonstrates rerouting with COW fork executors' do
+      load File.expand_path('../../examples/93_reroute_cow_basic.rb', __dir__)
+
+      base = RerouteCowBasicExample.new
+      base.run
+      expect(base.results.map { |r| r[:value] }.sort).to eq([1, 4, 9, 16, 25])
+
+      skip_example = RerouteCowSkipExample.new
+      skip_example.run
+      expect(skip_example.results.map { |r| r[:value] }.sort).to eq([1, 2, 3, 4, 5])
+
+      insert_example = RerouteCowInsertExample.new
+      insert_example.run
+      expect(insert_example.results.map { |r| r[:value] }.sort).to eq([1, 64, 729, 4096, 15625])
+    end
+  end
+
+  describe '94_reroute_mixed_executors.rb' do
+    it 'demonstrates rerouting across different executor types' do
+      load File.expand_path('../../examples/94_reroute_mixed_executors.rb', __dir__)
+
+      base = RerouteMixedExecutorsExample.new
+      base.run
+      expect(base.results.sort).to eq([12, 14, 16, 18, 20, 22])
+
+      reverse = RerouteMixedReverseExample.new
+      reverse.run
+      expect(reverse.results.sort).to eq([2, 4, 6, 8, 10, 12])
+    end
+  end
+
+  describe '95_reroute_to_inner_fork_stages.rb' do
+    it 'demonstrates rerouting to stages inside fork blocks' do
+      load File.expand_path('../../examples/95_reroute_to_inner_fork_stages.rb', __dir__)
+
+      base = RerouteToInnerForksExample.new
+      base.run
+      expect(base.results_a.sort).to eq([20, 40, 60])
+      expect(base.results_b.sort).to eq([110, 120, 130, 140, 150, 160])
+    end
+  end
+
+  describe '96_reroute_fork_fan_patterns.rb' do
+    it 'demonstrates rerouting with fork-based fan-out/fan-in' do
+      load File.expand_path('../../examples/96_reroute_fork_fan_patterns.rb', __dir__)
+
+      # Fan-out patterns should work with rerouting
+      fan_out = RerouteForkFanOutExample.new
+      fan_out.run
+      expect(fan_out.results.size).to eq(9)
+
+      # Fan-in patterns should work with rerouting
+      fan_in = RerouteForkFanInExample.new
+      fan_in.run
+      expect(fan_in.results.size).to eq(9)
+    end
+  end
+
+  describe '97_dynamic_routing_to_inner_fork_stages.rb' do
+    it 'demonstrates dynamic routing to stages inside fork blocks' do
+      load File.expand_path('../../examples/97_dynamic_routing_to_inner_fork_stages.rb', __dir__)
+
+      example = DynamicRoutingToInnerForksExample.new
+      example.run
+      expect(example.results.size).to eq(6)
+    end
+  end
+
   # Coverage check: ensure all example files have tests
   describe 'Example Coverage' do
     it 'has tests for all example files' do
