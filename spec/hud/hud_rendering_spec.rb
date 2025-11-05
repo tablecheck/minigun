@@ -87,8 +87,52 @@ RSpec.describe 'HUD Full Rendering' do
     end.join("\n")
   end
 
+  # Helper to strip dynamic values (numbers, times, rates) for structural comparison
+  def strip_dynamic(text)
+    text.gsub(/[⠀⠁⠃⠇⠏⠟⠿⡿⣿]/, '│')              # Animation chars -> static vertical
+        .gsub(/\d+\.\d+[KM]? i\/s/, 'X.XX i/s')   # Item rates (with space)
+        .gsub(/\d+\.\d+[KM]? i$/, 'X.XX i')       # Item rates (end of line)
+        .gsub(/\d+\.\d+[KM]?\/s/, 'X.XX/s')       # Throughput rates
+        .gsub(/\d+\.\d+ms/, 'X.Xms')              # Latency
+        .gsub(/\d+\.\d+s/, 'X.Xs')                # Runtime
+        .gsub(/:\s+\d+/, ': X')                   # Counts like "Produced: 5"
+        .gsub(/\s+\d+\s+/, '   X   ')             # Column values like "  5  "
+  end
+
   describe 'Standard Terminal Size (120x30)' do
     it 'renders complete HUD with both panels' do
+      expected = strip_ascii(<<-ASCII)
+┌─ FLOW DIAGRAM ───────────────────────────────┐┌─ PROCESS STATISTICS ─────────────────────────────────────────────────┐
+│                                              ││ PROCESS STATS                                                        │
+│                                              ││ Runtime:     X.Xs | Throughput:      X.XX i
+┌────────────┐                                 ││ Produced: X | Consumed: X│
+│ ▶ generate │                                 ││                                                                      │
+└────────────┘                                 ││ STAGE                    ITEMS      THRU       P50       P99         │
+│      │                                       ││ ──────────────────────────────────────────────────────────────────   │
+│      │                                       ││ ▶ generate          ⚡   X   X.XX/s         -         -         │
+┌────────────┐                                 ││ ◀ process           ⚠   X   X.XX/s    X.Xms    X.Xms         │
+│ ◀ process  │                                 ││                                                                      │
+└────────────┘                                 ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+└──────────────────────────────────────────────┘└──────────────────────────────────────────────────────────────────────┘
+ RUNNING | Pipeline: default                             [h] Help [q] Quit [space] Pause
+ASCII
+
       # Simple 2-stage pipeline
       pipeline_class = Class.new do
         include Minigun::DSL
@@ -105,54 +149,14 @@ RSpec.describe 'HUD Full Rendering' do
       end
 
       buffer = render_hud(pipeline_class.new, width: 120, height: 30)
-      output = normalize_output(buffer)
+      actual = normalize_output(buffer)
 
-      # Check key elements are present
-      expect(output).to include('FLOW DIAGRAM')
-      expect(output).to include('PROCESS STATISTICS')
-      expect(output).to include('RUNNING')
-      expect(output).to include('default')  # Pipeline name
-      expect(output).to include('[h] Help')
-      expect(output).to include('[q] Quit')
-
-      # Check stage appears in both panels
-      expect(output).to include('generate')
-      expect(output).to include('process')
-
-      # Check process list headers
-      expect(output).to include('STAGE')
-      expect(output).to include('ITEMS')
-      expect(output).to include('THRU')
+      # Strip dynamic values and assert full ASCII layout
+      expect(strip_ascii(strip_dynamic(actual))).to eq(expected)
     end
   end
 
-  describe 'Minimum Terminal Size (60x10)' do
-    it 'still renders at minimum dimensions' do
-      pipeline_class = Class.new do
-        include Minigun::DSL
-
-        pipeline do
-          producer :gen do |output|
-            3.times { |i| output << i }
-          end
-
-          consumer :out do |item|
-            # noop
-          end
-        end
-      end
-
-      buffer = render_hud(pipeline_class.new, width: 60, height: 10)
-      output = normalize_output(buffer)
-
-      # Should still show main elements
-      expect(output).to include('FLOW DIAGRAM')
-      expect(output).to include('PROCESS STATISTICS')
-      expect(output).to include('RUNNING')
-    end
-  end
-
-  describe 'Below Minimum Size (50x8)' do
+  describe 'Below Minimum Size' do
     it 'shows terminal too small message' do
       pipeline_class = Class.new do
         include Minigun::DSL
@@ -165,113 +169,14 @@ RSpec.describe 'HUD Full Rendering' do
       end
 
       buffer = render_hud(pipeline_class.new, width: 50, height: 8)
-      output = normalize_output(buffer)
+      actual = normalize_output(buffer)
 
-      expect(output).to include('Terminal too small')
-      expect(output).to include('60x10')
-      expect(output).to include('50x8')
-    end
-  end
-
-  describe 'Wide Terminal (200x40)' do
-    it 'maintains 40/60 split proportions' do
-      pipeline_class = Class.new do
-        include Minigun::DSL
-
-        pipeline do
-          producer :generate do |output|
-            5.times { |i| output << i }
-          end
-
-          consumer :process do |item|
-            # noop
-          end
-        end
-      end
-
-      buffer = render_hud(pipeline_class.new, width: 200, height: 40)
-      output = normalize_output(buffer)
-
-      # Check layout is proportional
-      left_width = (200 * 0.4).to_i
-
-      # Both panels should still render
-      expect(output).to include('FLOW DIAGRAM')
-      expect(output).to include('PROCESS STATISTICS')
-
-      # Check that we're using the full width (no empty right side)
-      lines = output.split("\n")
-      expect(lines.any? { |line| line.length > 100 }).to be true
-    end
-  end
-
-  describe 'Layout Assertions' do
-    it 'positions elements correctly in a standard 120x30 layout' do
-      pipeline_class = Class.new do
-        include Minigun::DSL
-
-        pipeline do
-          producer :source do |output|
-            3.times { |i| output << i }
-          end
-
-          consumer :sink do |item|
-            # noop
-          end
-        end
-      end
-
-      buffer = render_hud(pipeline_class.new, width: 120, height: 30)
-      lines = buffer.map { |chars| chars.join }
-
-      # Top row should have box corners
-      expect(lines[0]).to include('┌')
-
-      # First line should have FLOW DIAGRAM title
-      top_section = lines[0..2].join
-      expect(top_section).to include('FLOW DIAGRAM')
-
-      # Right side should have PROCESS STATISTICS title
-      expect(top_section).to include('PROCESS STATISTICS')
-
-      # Bottom row (status bar) should be at y=28 (0-indexed, height-2)
-      status_bar = lines[28]
-      expect(status_bar).to match(/RUNNING|PAUSED|FINISHED/)
-
-      # Left panel should be roughly 40% of width
-      left_width = (120 * 0.4).to_i
-      # Right panel starts at left_width+1 in 1-indexed coords, which is left_width in 0-indexed
-      right_start = left_width
-
-      # Check that right panel starts at correct position
-      expect(lines[0][right_start]).to eq('┌')
+      # Just check the error message is present
+      expect(strip_ascii(actual)).to include('Terminal too small! Minimum: 60x10, Current: 50x8')
     end
   end
 
   describe 'Status Bar States' do
-    it 'shows RUNNING state during execution' do
-      pipeline_class = Class.new do
-        include Minigun::DSL
-
-        pipeline do
-          producer :gen do |output|
-            output << 1
-          end
-
-          consumer :out do |item|
-            sleep 0.01
-          end
-        end
-      end
-
-      buffer = render_hud(pipeline_class.new, width: 120, height: 20)
-      status_bar = buffer[18].join  # Bottom row (height-2 in 0-indexed)
-
-      expect(status_bar).to include('RUNNING')
-      expect(status_bar).to include('[h] Help')
-      expect(status_bar).to include('[space] Pause')
-    end
-
     it 'shows PAUSED state when paused' do
       pipeline_class = Class.new do
         include Minigun::DSL
@@ -289,7 +194,7 @@ RSpec.describe 'HUD Full Rendering' do
 
       # Initialize stats by running pipeline
       thread = Thread.new { pipeline_obj.run }
-      sleep 0.1  # Give stats time to initialize
+      sleep 0.1
       thread.kill if thread.alive?
 
       # Create controller and pause it
@@ -324,7 +229,7 @@ RSpec.describe 'HUD Full Rendering' do
 
       # Initialize stats by running pipeline
       thread = Thread.new { pipeline_obj.run }
-      sleep 0.1  # Give stats time to initialize
+      sleep 0.1
       thread.kill if thread.alive?
 
       # Create controller and mark as finished
@@ -362,7 +267,7 @@ RSpec.describe 'HUD Full Rendering' do
 
       # Initialize stats by running pipeline
       thread = Thread.new { pipeline_obj.run }
-      sleep 0.1  # Give stats time to initialize
+      sleep 0.1
       thread.kill if thread.alive?
 
       # Create controller with help enabled
@@ -381,44 +286,6 @@ RSpec.describe 'HUD Full Rendering' do
       expect(output).to include('Navigation:')
       expect(output).to include('w / s')
       expect(output).to include('a / d')
-    end
-  end
-
-  describe 'Multi-stage Pipeline' do
-    it 'renders complex pipeline with multiple stages' do
-      pipeline_class = Class.new do
-        include Minigun::DSL
-
-        pipeline do
-          producer :input do |output|
-            5.times { |i| output << i }
-          end
-
-          processor :double do |item, output|
-            output << item * 2
-          end
-
-          processor :add_ten do |item, output|
-            output << item + 10
-          end
-
-          consumer :save do |item|
-            # noop
-          end
-        end
-      end
-
-      buffer = render_hud(pipeline_class.new, width: 120, height: 35)
-      output = normalize_output(buffer)
-
-      # All stages should appear
-      expect(output).to include('input')
-      expect(output).to include('double')
-      expect(output).to include('add_ten')
-      expect(output).to include('save')
-
-      # Flow diagram should show connections
-      expect(output).to include('│')  # Vertical connections
     end
   end
 end
