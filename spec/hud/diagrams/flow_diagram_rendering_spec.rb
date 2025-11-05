@@ -6,6 +6,12 @@ require_relative '../../../lib/minigun/hud/flow_diagram'
 require_relative '../../../lib/minigun/hud/stats_aggregator'
 
 RSpec.describe 'FlowDiagram Rendering' do
+  def strip_ascii(str)
+    str.sub!(/\A( *\n)+/m, '')
+    str.sub!(/(\n *)+\z/m, '')
+    str
+  end
+
   # Helper to capture the ASCII output from FlowDiagram
   def render_diagram(pipeline_instance, width: 46, height: 36)
     # Create a mock terminal buffer
@@ -66,7 +72,7 @@ RSpec.describe 'FlowDiagram Rendering' do
       # - Consumer at bottom
       # - Vertical connections between stages
 
-      expected = <<-ASCII.strip
+      expected = strip_ascii(<<-ASCII)
 ┌────────────┐
 │ ▶ generate │
 └────────────┘
@@ -132,7 +138,7 @@ ASCII
       # - Split line from producer to both processors
       # - Connections from both processors to merge
 
-      expected = <<-ASCII.strip
+      expected = strip_ascii(<<-ASCII)
        ┌────────────┐
        │ ▶ source   │
        └────────────┘
@@ -196,7 +202,7 @@ ASCII
       # - Three parallel consumers
       # - Split line fanning out to all consumers
 
-      expected = <<-ASCII.strip
+      expected = strip_ascii(<<-ASCII)
            ┌────────────┐
            │ ▶ generate │
            └────────────┘
@@ -253,7 +259,7 @@ ASCII
       # - Multiple paths of different lengths
       # - Final merge at bottom
 
-      expected = <<-ASCII.strip
+      expected = strip_ascii(<<-ASCII)
          ┌────────────┐
          │ ▶ source   │
          └────────────┘
