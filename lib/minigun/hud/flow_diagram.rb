@@ -493,11 +493,11 @@ module Minigun
           end
         end
 
-        # Draw final vertical line from merge point to target
-        # (Only if not already covered by a center source)
-        unless source_data.any? { |s| s[:x] == to_x }
-          terminal.write_at(x_offset + to_x, y_offset + merge_y, "│", color: color)
-        end
+        # Draw junction at the converge point (center X position)
+        # Use ┼ if there's a source directly above, ┬ if not
+        has_center_source = source_data.any? { |s| s[:x] == to_x }
+        junction_char = has_center_source ? "┼" : "┬"
+        terminal.write_at(x_offset + to_x, y_offset + merge_y, junction_char, color: color)
       end
 
       # Draw animated connection line between two boxes
