@@ -322,17 +322,23 @@ module Minigun
         leftmost_x = target_xs.first
         rightmost_x = target_xs.last
 
-        # Draw horizontal spine with T-junctions
+        # Draw horizontal spine with junctions
+        # Pattern:  ┌───────────────┼───────────────┐
+        #           │               │               │
+        # Where ┌ = left corner, ┼ = source (4-way junction), ┐ = right corner
         (leftmost_x..rightmost_x).each do |x|
           next if x < 0 || x >= @width
 
           # Determine the proper box-drawing character
-          char = if x == from_x && target_xs.include?(x)
-                   "┼"  # 4-way junction (source aligned with a target)
+          char = if x == leftmost_x
+                   # Left corner
+                   "┌"
+                 elsif x == rightmost_x
+                   # Right corner
+                   "┐"
                  elsif x == from_x
-                   "┴"  # T-junction: vertical from above meets horizontal spine
-                 elsif target_xs.include?(x)
-                   "┬"  # T-junction: horizontal spine branches down
+                   # Source position uses ┼ (4-way junction)
+                   "┼"
                  else
                    # Regular horizontal line (spine)
                    if active
