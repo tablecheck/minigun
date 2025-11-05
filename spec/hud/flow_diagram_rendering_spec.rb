@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
 require 'spec_helper'
-require_relative '../../../lib/minigun'
-require_relative '../../../lib/minigun/hud/flow_diagram'
-require_relative '../../../lib/minigun/hud/stats_aggregator'
+require_relative '../../lib/minigun'
+require_relative '../../lib/minigun/hud/flow_diagram'
+require_relative '../../lib/minigun/hud/stats_aggregator'
 
 RSpec.describe 'FlowDiagram Rendering' do
   def strip_ascii(str)
