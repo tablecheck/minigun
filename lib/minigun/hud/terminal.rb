@@ -34,6 +34,11 @@ module Minigun
         print "\e[2J\e[H"
       end
 
+      # Clear terminal including scrollback buffer
+      def clear_all
+        print "\e[3J\e[2J\e[H"  # \e[3J clears scrollback, \e[2J clears screen, \e[H moves to home
+      end
+
       # Reset internal buffers (for resize/refresh)
       def reset_buffers
         @buffer.clear
@@ -126,8 +131,13 @@ module Minigun
       def setup
         return unless IO.console
 
+        # Switch to alternate screen buffer (like htop, vim, less)
+        # This prevents scrollback and preserves previous terminal content
+        print "\e[?1049h"
+
         hide_cursor
-        clear
+        clear  # Clear the alternate screen
+
         # Enable raw mode for immediate key input
         $stdin.raw!
         # Disable echo
@@ -139,11 +149,16 @@ module Minigun
         return unless IO.console
 
         show_cursor
-        clear
+
         # Restore cooked mode
         $stdin.cooked!
         $stdin.echo = true
-        move_to(1, 1)
+
+        # Clear any ANSI formatting
+        print COLORS[:reset]
+
+        # Switch back to normal screen buffer (restores previous content)
+        print "\e[?1049l"
       end
 
       # ANSI color codes (cyberpunk theme)

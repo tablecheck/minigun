@@ -72,14 +72,22 @@ module Minigun
                 end
 
         # Render node: [icon] name indicator
-        node_text = "#{icon} #{display_name} #{indicator}"
-        terminal.write_at(x, y, node_text, color: color)
+        # Calculate visual length (without ANSI codes)
+        visual_text = "#{icon} #{display_name} #{indicator}"
 
-        # Show throughput next to node
+        # Add throughput if available, but ensure total doesn't exceed width
         if stage_data[:throughput] && stage_data[:throughput] > 0
-          throughput_text = " (#{format_throughput(stage_data[:throughput])} i/s)"
-          terminal.write_at(x + node_text.length, y, throughput_text, color: Theme.muted)
+          throughput_suffix = " (#{format_throughput(stage_data[:throughput])} i/s)"
+          # Check if adding throughput would exceed width
+          if visual_text.length + throughput_suffix.length <= @width
+            visual_text += throughput_suffix
+          end
         end
+
+        # Truncate if still too long
+        visual_text = visual_text[0...@width] if visual_text.length > @width
+
+        terminal.write_at(x, y, visual_text, color: color)
       end
 
       def render_connector(terminal, stage_data, x, y)

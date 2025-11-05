@@ -57,31 +57,60 @@ module Minigun
         total_produced = stats_data[:total_produced] || 0
         total_consumed = stats_data[:total_consumed] || 0
 
+        # Format with fixed widths for stable columns
         # Line 1: Runtime and overall throughput
-        line1 = "Runtime: #{Theme.info}#{runtime.round(2)}s#{Terminal::COLORS[:reset]} | " \
-                "Throughput: #{Theme.format_throughput(throughput)} i/s"
-        terminal.write_at(x + 2, y, line1)
+        runtime_str = format("%.2f", runtime).rjust(8)
+        throughput_str = format_throughput_fixed(throughput).rjust(10)
 
-        # Line 2: Items
-        line2 = "Produced: #{Theme.success}#{total_produced}#{Terminal::COLORS[:reset]} | " \
-                "Consumed: #{Theme.success}#{total_consumed}#{Terminal::COLORS[:reset]}"
-        terminal.write_at(x + 2, y + 1, line2)
+        line1_parts = [
+          "Runtime: ",
+          Theme.info,
+          runtime_str,
+          "s",
+          Terminal::COLORS[:reset],
+          " | Throughput: ",
+          throughput_color(throughput),
+          throughput_str,
+          " i/s",
+          Terminal::COLORS[:reset]
+        ]
+        terminal.write_at(x + 2, y, line1_parts.join)
+
+        # Line 2: Items with fixed widths
+        produced_str = format_number_fixed(total_produced).rjust(8)
+        consumed_str = format_number_fixed(total_consumed).rjust(8)
+
+        line2_parts = [
+          "Produced: ",
+          Theme.success,
+          produced_str,
+          Terminal::COLORS[:reset],
+          " | Consumed: ",
+          Theme.success,
+          consumed_str,
+          Terminal::COLORS[:reset]
+        ]
+        terminal.write_at(x + 2, y + 1, line2_parts.join)
       end
 
       def render_table_header(terminal, x, y)
-        # Headers
+        # Headers with adjusted widths and alignment
         headers = [
-          { text: "STAGE", width: 20 },
-          { text: "STATUS", width: 8 },
-          { text: "ITEMS", width: 10 },
-          { text: "THRU", width: 10 },
-          { text: "P50", width: 8 },
-          { text: "P99", width: 8 }
+          { text: "STAGE", width: 20, align: :left },
+          { text: "", width: 2, align: :left },           # Status indicator (no label, just 1 char + spacing)
+          { text: "ITEMS", width: 8, align: :right },     # Right-align for numbers
+          { text: "THRU", width: 10, align: :right },     # Right-align for numbers
+          { text: "P50", width: 10, align: :right },      # Right-align for numbers
+          { text: "P99", width: 10, align: :right }       # Right-align for numbers
         ]
 
         x_pos = x + 2
         headers.each do |header|
-          text = header[:text].ljust(header[:width])
+          text = if header[:align] == :right
+                   header[:text].rjust(header[:width])
+                 else
+                   header[:text].ljust(header[:width])
+                 end
           terminal.write_at(x_pos, y, text, color: Theme.secondary + Terminal::COLORS[:bold])
           x_pos += header[:width]
         end
@@ -95,7 +124,7 @@ module Minigun
         name = stage_data[:stage_name].to_s
         status = determine_status(stage_data)
 
-        # Column 1: Stage name with icon
+        # Column 1: Stage name with icon (20 chars)
         type = stage_data[:type] || :processor
         icon = Theme.stage_icon(type)
         name_text = "#{icon} #{truncate(name, 17)}"
@@ -103,16 +132,16 @@ module Minigun
 
         x_pos = x + 22
 
-        # Column 2: Status indicator
+        # Column 2: Status indicator (2 chars: 1 for icon + 1 spacing)
         indicator = Theme.status_indicator(status)
-        terminal.write_at(x_pos, y, indicator.ljust(8), color: stage_color(status))
-        x_pos += 8
+        terminal.write_at(x_pos, y, indicator, color: stage_color(status))
+        x_pos += 2
 
-        # Column 3: Items (produced or consumed)
+        # Column 3: Items (produced or consumed) - narrower
         items = stage_data[:total_items] || 0
-        items_text = format_number(items).rjust(10)
+        items_text = format_number(items).rjust(8)
         terminal.write_at(x_pos, y, items_text, color: Theme.text)
-        x_pos += 10
+        x_pos += 8
 
         # Column 4: Throughput
         throughput = stage_data[:throughput] || 0
@@ -120,23 +149,23 @@ module Minigun
         terminal.write_at(x_pos, y, throughput_text, color: throughput_color(throughput))
         x_pos += 10
 
-        # Column 5: P50 latency
+        # Column 5: P50 latency - more padding
         if stage_data[:latency] && stage_data[:latency][:p50]
           p50 = stage_data[:latency][:p50]
-          p50_text = "#{p50.round(1)}ms".rjust(8)
+          p50_text = "#{p50.round(1)}ms".rjust(10)
           terminal.write_at(x_pos, y, p50_text, color: latency_color(p50))
         else
-          terminal.write_at(x_pos, y, "-".rjust(8), color: Theme.muted)
+          terminal.write_at(x_pos, y, "-".rjust(10), color: Theme.muted)
         end
-        x_pos += 8
+        x_pos += 10
 
-        # Column 6: P99 latency
+        # Column 6: P99 latency - more padding
         if stage_data[:latency] && stage_data[:latency][:p99]
           p99 = stage_data[:latency][:p99]
-          p99_text = "#{p99.round(1)}ms".rjust(8)
+          p99_text = "#{p99.round(1)}ms".rjust(10)
           terminal.write_at(x_pos, y, p99_text, color: latency_color(p99))
         else
-          terminal.write_at(x_pos, y, "-".rjust(8), color: Theme.muted)
+          terminal.write_at(x_pos, y, "-".rjust(10), color: Theme.muted)
         end
       end
 
@@ -216,6 +245,30 @@ module Minigun
           "#{(value / 1000.0).round(1)}K/s"
         else
           "#{value.round(1)}/s"
+        end
+      end
+
+      # Format throughput with fixed width (always fits in 10 chars)
+      def format_throughput_fixed(value)
+        return "0.00" if value == 0
+
+        if value >= 1_000_000
+          format("%.2fM", value / 1_000_000.0)
+        elsif value >= 1_000
+          format("%.2fK", value / 1_000.0)
+        else
+          format("%.2f", value)
+        end
+      end
+
+      # Format number with fixed width (always fits in 8 chars)
+      def format_number_fixed(value)
+        if value >= 1_000_000
+          format("%.2fM", value / 1_000_000.0)
+        elsif value >= 1_000
+          format("%.2fK", value / 1_000.0)
+        else
+          value.to_s
         end
       end
     end

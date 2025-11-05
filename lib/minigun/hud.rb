@@ -59,13 +59,16 @@ module Minigun
 
       raise ArgumentError, "No pipeline found in task" unless pipeline
 
+      # Flag to track if user quit via HUD
+      user_quit = false
+
       # Start HUD in a separate thread
-      hud = Controller.new(pipeline)
+      hud = Controller.new(pipeline, on_quit: -> { user_quit = true })
       hud_thread = Thread.new do
         begin
           hud.start
         rescue => e
-          warn "HUD error: #{e.message}"
+          warn "\nHUD error: #{e.message}"
           warn e.backtrace.join("\n")
         end
       end
@@ -73,18 +76,32 @@ module Minigun
       # Give HUD time to initialize
       sleep 0.1
 
-      # Run the task
-      begin
-        task_instance.run
-      ensure
-        # Keep HUD running for a moment to show final stats
-        sleep 1
-
-        # Stop HUD
-        hud.stop
-        hud_thread.join(1) # 1 second timeout
-        hud_thread.kill if hud_thread.alive?
+      # Run the task in a separate thread so we can monitor for HUD quit
+      task_thread = Thread.new do
+        begin
+          task_instance.run
+        rescue Interrupt
+          # Gracefully handle Ctrl+C
+        end
       end
+
+      # Monitor for user quit
+      loop do
+        if user_quit
+          # User pressed 'q' in HUD - exit immediately
+          task_thread.kill if task_thread.alive?
+          break
+        end
+
+        break unless task_thread.alive?
+        sleep 0.1
+      end
+
+      # Cleanup
+      hud.stop
+      hud_thread.join(1)
+      hud_thread.kill if hud_thread.alive?
+      task_thread.join(0.5) if task_thread.alive?
     end
   end
 end

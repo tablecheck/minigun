@@ -12,7 +12,7 @@ module Minigun
       attr_reader :terminal, :flow_diagram, :process_list, :stats_aggregator
       attr_accessor :running, :paused
 
-      def initialize(pipeline)
+      def initialize(pipeline, on_quit: nil)
         @pipeline = pipeline
         @terminal = Terminal.new
         @stats_aggregator = StatsAggregator.new(pipeline)
@@ -20,6 +20,7 @@ module Minigun
         @paused = false
         @show_help = false
         @resize_requested = false
+        @on_quit = on_quit  # Optional callback when user quits
 
         # Calculate layout (2-column split)
         calculate_layout
@@ -190,13 +191,17 @@ module Minigun
         if @show_help && key != 'h' && key != 'H' && key != '?'
           @show_help = false
           # q still quits even when help is shown
-          @running = false if key == 'q' || key == 'Q' || key == "\u0003"
+          if key == 'q' || key == 'Q' || key == "\u0003"
+            @running = false
+            @on_quit&.call
+          end
           return
         end
 
         case key
         when 'q', 'Q', "\u0003" # q, Q, or Ctrl+C
           @running = false
+          @on_quit&.call  # Notify that user requested quit
 
         when ' ' # Space - pause/resume
           @paused = !@paused
