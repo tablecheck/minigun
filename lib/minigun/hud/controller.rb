@@ -84,8 +84,12 @@ module Minigun
         @left_width = (width * 0.4).to_i
         @right_width = width - @left_width
 
-        # Components
-        @flow_diagram = FlowDiagram.new(@left_width - 2, height - 4)
+        # Components - resize existing or create new
+        if @flow_diagram
+          @flow_diagram.resize(@left_width - 2, height - 4)
+        else
+          @flow_diagram = FlowDiagram.new(@left_width - 2, height - 4)
+        end
 
         # Preserve scroll offset if process_list exists
         old_scroll = @process_list&.scroll_offset || 0

@@ -15,12 +15,26 @@ module Minigun
         @pan_x = 0  # Horizontal pan offset
         @pan_y = 0  # Vertical pan offset
         @needs_clear = false  # Flag to indicate if we need to clear before rendering
+        @user_panned = false  # Track if user has manually panned
+      end
+
+      # Update dimensions (called on resize)
+      def resize(width, height)
+        @width = width
+        @height = height
+        # If user hasn't manually panned, reset to centered view on resize
+        unless @user_panned
+          @pan_x = 0
+          @pan_y = 0
+        end
+        @needs_clear = true
       end
 
       # Pan the diagram
       def pan(dx, dy)
         @pan_x += dx
         @pan_y += dy
+        @user_panned = true  # Mark that user has manually panned
         @needs_clear = true  # Mark that we need to clear on next render
       end
 
@@ -87,17 +101,17 @@ module Minigun
         min_y = layout.values.map { |pos| pos[:y] }.min
         max_y = layout.values.map { |pos| pos[:y] + pos[:height] }.max
 
-        # Clamp pan_x: allow panning to see all content
-        # Can pan right until leftmost element is at left edge of viewport
-        max_pan_x = min_x
-        # Can pan left until rightmost element is at right edge of viewport
-        min_pan_x = max_x - @width
+        # Clamp pan_x: ensure diagram never crosses left border (x=0)
+        # Max pan right: leftmost box must stay at x >= 0
+        max_pan_x = min_x  # When pan_x = min_x, leftmost box is at x=0
+        # Min pan left: rightmost box should be visible
+        min_pan_x = [max_x - @width, 0].max  # But never pan left past 0
 
-        # Clamp pan_y: allow panning to see all content
-        # Can pan down until topmost element is at top edge (below title at y=2)
-        max_pan_y = min_y - 2
+        # Clamp pan_y: allow panning to see all content vertically
+        # Can pan down until topmost element is at y=0 (start of panel, no reserved space)
+        max_pan_y = min_y
         # Can pan up until bottommost element is at bottom edge
-        min_pan_y = max_y - @height
+        min_pan_y = [max_y - @height, 0].max  # But never pan up past 0
 
         # Apply clamping
         @pan_x = [[@pan_x, min_pan_x].max, max_pan_x].min
@@ -143,6 +157,17 @@ module Minigun
         unless layout.empty?
           min_x = layout.values.map { |pos| pos[:x] }.min
           layout.each { |name, pos| pos[:x] -= min_x }
+        end
+
+        # Center the entire diagram horizontally within the viewport
+        unless layout.empty?
+          max_x = layout.values.map { |pos| pos[:x] + pos[:width] }.max
+          diagram_width = max_x
+          center_offset = (@width - diagram_width) / 2
+          # Only center if diagram is narrower than viewport
+          if center_offset > 0
+            layout.each { |name, pos| pos[:x] += center_offset }
+          end
         end
 
         layout

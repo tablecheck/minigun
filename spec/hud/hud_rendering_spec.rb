@@ -105,14 +105,14 @@ RSpec.describe 'HUD Full Rendering' do
 ┌─ FLOW DIAGRAM ───────────────────────────────┐┌─ PROCESS STATISTICS ─────────────────────────────────────────────────┐
 │                                              ││ PROCESS STATS                                                        │
 │                                              ││ Runtime:     X.Xs | Throughput:      X.XX i
-┌────────────┐                                 ││ Produced: X | Consumed: X│
-│ ▶ generate │                                 ││                                                                      │
-└────────────┘                                 ││ STAGE                    ITEMS      THRU       P50       P99         │
-│      │                                       ││ ──────────────────────────────────────────────────────────────────   │
-│      │                                       ││ ▶ generate          ⚡   X   X.XX/s         -         -         │
-┌────────────┐                                 ││ ◀ process           ⚠   X   X.XX/s    X.Xms    X.Xms         │
-│ ◀ process  │                                 ││                                                                      │
-└────────────┘                                 ││                                                                      │
+│                ┌────────────┐                ││ Produced: X | Consumed: X│
+│                │ ▶ generate │                ││                                                                      │
+│                └────────────┘                ││ STAGE                    ITEMS      THRU       P50       P99         │
+│                       │                      ││ ──────────────────────────────────────────────────────────────────   │
+│                       │                      ││ ▶ generate          ⚡   X   X.XX/s         -         -         │
+│                ┌────────────┐                ││ ◀ process           ⚠   X   X.XX/s    X.Xms    X.Xms         │
+│                │ ◀ process  │                ││                                                                      │
+│                └────────────┘                ││                                                                      │
 │                                              ││                                                                      │
 │                                              ││                                                                      │
 │                                              ││                                                                      │
