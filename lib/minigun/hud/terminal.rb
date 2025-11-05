@@ -34,6 +34,12 @@ module Minigun
         print "\e[2J\e[H"
       end
 
+      # Reset internal buffers (for resize/refresh)
+      def reset_buffers
+        @buffer.clear
+        @previous_buffer.clear
+      end
+
       # Hide cursor
       def hide_cursor
         print "\e[?25l"
@@ -56,14 +62,27 @@ module Minigun
 
       # Write text at position with optional color
       def write_at(x, y, text, color: nil)
+        # Boundary check - don't write outside visible area
+        return if x < 1 || y < 1 || y > @height || x > @width
+
+        # Truncate text if it would exceed width
+        max_len = @width - x + 1
+        text = text[0...max_len] if text.length > max_len
+
         @buffer << { x: x, y: y, text: text, color: color }
       end
 
       # Draw a box
       def draw_box(x, y, w, h, title: nil, color: nil)
+        # Boundary check - ensure box fits in terminal
+        return if x < 1 || y < 1 || x + w > @width || y + h > @height
+        return if w < 3 || h < 3
+
         # Top border
         top_line = "┌" + ("─" * (w - 2)) + "┐"
-        top_line = "┌─ #{title} " + ("─" * (w - 5 - title.length)) + "┐" if title
+        if title && title.length < w - 5
+          top_line = "┌─ #{title} " + ("─" * (w - 5 - title.length)) + "┐"
+        end
 
         write_at(x, y, top_line, color: color)
 
@@ -78,9 +97,12 @@ module Minigun
 
       # Render the buffer to screen (double-buffered)
       def render
-        # Only redraw changed parts
+        # If previous buffer is empty, force full redraw (e.g., after resize)
+        force_redraw = @previous_buffer.empty?
+
+        # Only redraw changed parts (or everything if force_redraw)
         @buffer.each_with_index do |item, index|
-          if @previous_buffer[index] != item
+          if force_redraw || @previous_buffer[index] != item
             move_to(item[:x], item[:y])
             if item[:color]
               print item[:color] + item[:text] + COLORS[:reset]

@@ -19,9 +19,13 @@ module Minigun
         @running = false
         @paused = false
         @show_help = false
+        @resize_requested = false
 
         # Calculate layout (2-column split)
         calculate_layout
+
+        # Set up terminal resize handler
+        setup_resize_handler
       end
 
       # Start the HUD
@@ -35,6 +39,14 @@ module Minigun
         # Main event loop
         loop do
           frame_start = Time.now
+
+          # Check for terminal resize
+          if @resize_requested
+            @resize_requested = false
+            @terminal.clear
+            @terminal.reset_buffers
+            calculate_layout
+          end
 
           # Handle keyboard input
           handle_input
@@ -50,6 +62,7 @@ module Minigun
           sleep([FRAME_TIME - elapsed, 0].max)
         end
       ensure
+        cleanup_resize_handler
         @terminal.teardown
       end
 
@@ -71,10 +84,24 @@ module Minigun
 
         # Components
         @flow_diagram = FlowDiagram.new(@left_width - 2, height - 4)
+
+        # Preserve scroll offset if process_list exists
+        old_scroll = @process_list&.scroll_offset || 0
         @process_list = ProcessList.new(@right_width - 2, height - 4)
+        @process_list.scroll_offset = old_scroll
       end
 
       def render_frame
+        # Check minimum terminal size
+        if @terminal.width < 60 || @terminal.height < 10
+          @terminal.clear
+          @terminal.reset_buffers
+          msg = "Terminal too small! Minimum: 60x10, Current: #{@terminal.width}x#{@terminal.height}"
+          @terminal.write_at(1, 1, msg, color: Theme.warning)
+          @terminal.render
+          return
+        end
+
         # Collect fresh stats
         stats_data = @stats_aggregator.collect
         return unless stats_data
@@ -170,7 +197,7 @@ module Minigun
           @show_help = !@show_help
 
         when 'r', 'R' # Force refresh
-          calculate_layout
+          @resize_requested = true
 
         when :up # Scroll up
           @process_list.scroll_offset = [@process_list.scroll_offset - 1, 0].max
@@ -187,6 +214,25 @@ module Minigun
       rescue StandardError => e
         # Log error but don't crash HUD
         warn "Error handling input: #{e.message}"
+      end
+
+      def setup_resize_handler
+        return unless Signal.list.key?('WINCH')
+
+        @resize_handler = Signal.trap('WINCH') do
+          @resize_requested = true
+        end
+      rescue StandardError => e
+        # SIGWINCH not supported on this platform
+        warn "Terminal resize detection not available: #{e.message}" if $DEBUG
+      end
+
+      def cleanup_resize_handler
+        return unless @resize_handler
+
+        Signal.trap('WINCH', @resize_handler)
+      rescue StandardError
+        # Ignore cleanup errors
       end
     end
   end
