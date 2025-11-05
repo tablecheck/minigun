@@ -6,7 +6,6 @@ module Minigun
   module HUD
     # Renders pipeline DAG as animated ASCII flow diagram with boxes and connections
     class FlowDiagram
-      attr_reader :width, :height, :diagram_width
 
       def initialize(width, height)
         @width = width
@@ -24,11 +23,11 @@ module Minigun
 
       # Calculate layout and return diagram dimensions
       def prepare_layout(stats_data)
-        return { width: 0, height: @height, diagram_height: 0 } unless stats_data && stats_data[:stages]
+        return { width: 0, diagram_height: 0 } unless stats_data && stats_data[:stages]
 
         stages = stats_data[:stages]
         dag = stats_data[:dag]
-        return { width: 0, height: @height, diagram_height: 0 } if stages.empty?
+        return { width: 0, diagram_height: 0 } if stages.empty?
 
         # Filter out router stages (internal implementation details)
         visible_stages = stages.reject { |s| s[:type] == :router }
@@ -47,7 +46,7 @@ module Minigun
         end
 
         # Return diagram dimensions
-        { width: @diagram_width, height: @height, diagram_height: @diagram_height }
+        { width: @diagram_width, diagram_height: @diagram_height }
       end
 
       # Render the flow diagram to terminal at given position
@@ -377,8 +376,6 @@ module Minigun
           to_y = to_pos[:y]
 
           ((split_y + 1)...to_y).each do |y|
-            next if y < 0 || y >= @height
-
             char = if active
                      offset = (@animation_frame / 4) % Theme::FLOW_CHARS.length
                      phase = (y - split_y + offset) % Theme::FLOW_CHARS.length
@@ -418,8 +415,6 @@ module Minigun
         source_data.each do |source|
           # Vertical line from source to turn point
           (source[:y]...merge_y).each do |y|
-            next if y < 0 || y >= @height
-
             char = if active
                      offset = (@animation_frame / 4) % Theme::FLOW_CHARS.length
                      phase = (y - source[:y] + offset) % Theme::FLOW_CHARS.length
@@ -491,8 +486,6 @@ module Minigun
         if from_x == to_x
           # Straight vertical line
           (from_y...to_y).each do |y|
-            next if y < 0 || y >= @height
-
             char = if active
                      offset = (@animation_frame / 4) % Theme::FLOW_CHARS.length
                      phase = (y - from_y + offset) % Theme::FLOW_CHARS.length
@@ -526,8 +519,6 @@ module Minigun
 
           # Second vertical segment (drop to target)
           ((mid_y + 1)...to_y).each do |y|
-            next if y < 0 || y >= @height
-
             char = if active
                      offset = (@animation_frame / 4) % Theme::FLOW_CHARS.length
                      phase = (y - mid_y + offset) % Theme::FLOW_CHARS.length
