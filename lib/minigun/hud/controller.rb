@@ -162,19 +162,19 @@ module Minigun
           "",
           "  Navigation:",
           "    ↑ / ↓     - Scroll process list",
-          "    ← / →     - Switch panels",
           "",
           "  Controls:",
-          "    SPACE     - Pause/Resume",
-          "    r / R     - Force refresh",
-          "    d / D     - Toggle details",
-          "    c / C     - Compact view",
+          "    SPACE     - Pause/Resume updates",
+          "    r / R     - Force refresh/resize",
+          "    d / D     - Toggle details (future)",
+          "    c / C     - Compact view (future)",
           "",
           "  Other:",
           "    h / H / ? - Toggle this help",
-          "    q / Q     - Quit",
+          "    q / Q     - Quit HUD",
+          "    Ctrl+C    - Quit HUD",
           "",
-          "  Press any key to close..."
+          "  Press any key to close this help..."
         ]
 
         help_lines.each_with_index do |line, index|
@@ -185,6 +185,14 @@ module Minigun
       def handle_input
         key = Keyboard.read_nonblocking
         return unless key
+
+        # If help is showing, any key closes it (except for toggling help again)
+        if @show_help && key != 'h' && key != 'H' && key != '?'
+          @show_help = false
+          # q still quits even when help is shown
+          @running = false if key == 'q' || key == 'Q' || key == "\u0003"
+          return
+        end
 
         case key
         when 'q', 'Q', "\u0003" # q, Q, or Ctrl+C

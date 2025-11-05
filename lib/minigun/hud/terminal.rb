@@ -66,8 +66,9 @@ module Minigun
         return if x < 1 || y < 1 || y > @height || x > @width
 
         # Truncate text if it would exceed width
+        # If x=1 and width=120, we can write up to position 120, so max_len = 120
         max_len = @width - x + 1
-        text = text[0...max_len] if text.length > max_len
+        text = text[0...max_len] if text.length > max_len && max_len > 0
 
         @buffer << { x: x, y: y, text: text, color: color }
       end
@@ -75,13 +76,18 @@ module Minigun
       # Draw a box
       def draw_box(x, y, w, h, title: nil, color: nil)
         # Boundary check - ensure box fits in terminal
-        return if x < 1 || y < 1 || x + w > @width || y + h > @height
+        # Box occupies from x to x+w-1, so rightmost char is at x+w-1
+        return if x < 1 || y < 1 || (x + w - 1) > @width || (y + h - 1) > @height
         return if w < 3 || h < 3
 
-        # Top border
-        top_line = "┌" + ("─" * (w - 2)) + "┐"
-        if title && title.length < w - 5
-          top_line = "┌─ #{title} " + ("─" * (w - 5 - title.length)) + "┐"
+        # Top border with optional title
+        # Format: "┌─ TITLE ─────┐" where total width = w
+        if title && title.length + 5 <= w  # "┌─ " + title + " " + "─" + "┐" = 5 chars overhead
+          title_section = "─ #{title} "
+          remaining_dashes = w - 2 - title_section.length  # -2 for corners
+          top_line = "┌#{title_section}#{'─' * remaining_dashes}┐"
+        else
+          top_line = "┌" + ("─" * (w - 2)) + "┐"
         end
 
         write_at(x, y, top_line, color: color)
