@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'set'
+
 module Minigun
   module HUD
     # Renders pipeline DAG as animated ASCII flow diagram with boxes and connections
@@ -275,29 +277,65 @@ module Minigun
 
         edges = bridged_edges.uniq
 
-        # Group edges by source
+        # Group edges by source and target to detect fan-out and fan-in
         edges_by_source = edges.group_by { |e| e[:from] }
+        edges_by_target = edges.group_by { |e| e[:to] }
 
-        # Render each source's connections
+        # Track which edges have been rendered
+        rendered_edges = Set.new
+
+        # First pass: Render fan-out connections (one source to multiple targets)
         edges_by_source.each do |from_name, from_edges|
+          next if from_edges.size <= 1  # Skip single connections for now
+
           from_pos = layout[from_name]
           next unless from_pos
 
           stage_data = stage_map[from_name]
           next unless stage_data
 
-          # Get target positions
           target_names = from_edges.map { |e| e[:to] }
           target_positions = target_names.map { |name| layout[name] }.compact
-
           next if target_positions.empty?
 
-          # Draw fan-out connection or single connection
-          if target_positions.size > 1
-            render_fanout_connection(terminal, from_pos, target_positions, stage_data, x_offset, y_offset)
-          else
-            render_connection_line(terminal, from_pos, target_positions.first, stage_data, x_offset, y_offset)
-          end
+          render_fanout_connection(terminal, from_pos, target_positions, stage_data, x_offset, y_offset)
+          from_edges.each { |e| rendered_edges.add(e) }
+        end
+
+        # Second pass: Render fan-in connections (multiple sources to one target)
+        edges_by_target.each do |to_name, to_edges|
+          next if to_edges.size <= 1  # Skip single connections for now
+
+          to_pos = layout[to_name]
+          next unless to_pos
+
+          source_names = to_edges.map { |e| e[:from] }
+          source_positions = source_names.zip(to_edges).map do |name, edge|
+            next if rendered_edges.include?(edge)
+            layout[name]
+          end.compact
+          next if source_positions.empty?
+
+          # Get stage data from first source for color
+          first_source = to_edges.first[:from]
+          stage_data = stage_map[first_source] || {}
+
+          render_fanin_connection(terminal, source_positions, to_pos, stage_data, x_offset, y_offset)
+          to_edges.each { |e| rendered_edges.add(e) }
+        end
+
+        # Third pass: Render remaining single connections
+        edges.each do |edge|
+          next if rendered_edges.include?(edge)
+
+          from_pos = layout[edge[:from]]
+          to_pos = layout[edge[:to]]
+          next unless from_pos && to_pos
+
+          stage_data = stage_map[edge[:from]]
+          next unless stage_data
+
+          render_connection_line(terminal, from_pos, to_pos, stage_data, x_offset, y_offset)
         end
       end
 
@@ -322,10 +360,12 @@ module Minigun
         leftmost_x = target_xs.first
         rightmost_x = target_xs.last
 
+        # Check if there's a target directly below the source
+        has_center_target = target_xs.include?(from_x)
+
         # Draw horizontal spine with junctions
-        # Pattern:  ┌───────────────┼───────────────┐
-        #           │               │               │
-        # Where ┌ = left corner, ┼ = source (4-way junction), ┐ = right corner
+        # Pattern with center target:  ┌───────────────┼───────────────┐
+        # Pattern without center:      ┌───────────────┴───────────────┐
         (leftmost_x..rightmost_x).each do |x|
           next if x < 0 || x >= @width
 
@@ -337,8 +377,8 @@ module Minigun
                    # Right corner
                    "┐"
                  elsif x == from_x
-                   # Source position uses ┼ (4-way junction)
-                   "┼"
+                   # Source position: ┼ if target below, ┴ if not
+                   has_center_target ? "┼" : "┴"
                  else
                    # Regular horizontal line (spine)
                    if active
@@ -370,6 +410,93 @@ module Minigun
 
             terminal.write_at(x_offset + to_x, y_offset + y, char, color: color)
           end
+        end
+      end
+
+      # Draw a fan-in connection (multiple sources to one target)
+      def render_fanin_connection(terminal, source_positions, to_pos, stage_data, x_offset, y_offset)
+        to_x = to_pos[:x] + to_pos[:width] / 2
+        to_y = to_pos[:y]
+
+        # Check if connection is active
+        active = stage_data[:throughput] && stage_data[:throughput] > 0
+        color = active ? Theme.primary : Theme.muted
+
+        # Calculate merge point (where horizontal lines converge)
+        # Place it 1 line above the target
+        merge_y = to_y - 1
+
+        # Get source X positions (sorted)
+        source_data = source_positions.map do |pos|
+          {
+            x: pos[:x] + pos[:width] / 2,
+            y: pos[:y] + pos[:height]
+          }
+        end.sort_by { |s| s[:x] }
+
+        # Draw vertical lines from each source down to merge level
+        # Then turn inward with corners
+        source_data.each do |source|
+          # Vertical line from source to turn point
+          (source[:y]...merge_y).each do |y|
+            next if y < 0 || y >= @height
+
+            char = if active
+                     offset = (@animation_frame / 4) % Theme::FLOW_CHARS.length
+                     phase = (y - source[:y] + offset) % Theme::FLOW_CHARS.length
+                     Theme::FLOW_CHARS[phase]
+                   else
+                     "│"
+                   end
+
+            terminal.write_at(x_offset + source[:x], y_offset + y, char, color: color)
+          end
+
+          # Corner at turn point
+          if source[:x] < to_x
+            # Left source: turn right with └
+            terminal.write_at(x_offset + source[:x], y_offset + merge_y, "└", color: color)
+
+            # Horizontal line from corner to center (or near target)
+            ((source[:x] + 1)...to_x).each do |x|
+              next if x < 0 || x >= @width
+
+              char = if active
+                       offset = (@animation_frame / 4) % 4
+                       ["─", "╌", "┄", "┈"][offset]
+                     else
+                       "─"
+                     end
+
+              terminal.write_at(x_offset + x, y_offset + merge_y, char, color: color)
+            end
+          elsif source[:x] > to_x
+            # Right source: turn left with ┘
+            terminal.write_at(x_offset + source[:x], y_offset + merge_y, "┘", color: color)
+
+            # Horizontal line from corner to center (or near target)
+            ((to_x + 1)...source[:x]).each do |x|
+              next if x < 0 || x >= @width
+
+              char = if active
+                       offset = (@animation_frame / 4) % 4
+                       ["─", "╌", "┄", "┈"][offset]
+                     else
+                       "─"
+                     end
+
+              terminal.write_at(x_offset + x, y_offset + merge_y, char, color: color)
+            end
+          else
+            # Source directly above target - just draw vertical line
+            # (already drawn above)
+          end
+        end
+
+        # Draw final vertical line from merge point to target
+        # (Only if not already covered by a center source)
+        unless source_data.any? { |s| s[:x] == to_x }
+          terminal.write_at(x_offset + to_x, y_offset + merge_y, "│", color: color)
         end
       end
 
