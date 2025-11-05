@@ -71,9 +71,14 @@ RSpec.describe Minigun::HUD do
   describe 'FlowDiagram' do
     let(:flow_diagram) { Minigun::HUD::FlowDiagram.new(40, 20) }
 
-    it 'initializes with dimensions' do
-      expect(flow_diagram.width).to eq(40)
-      expect(flow_diagram.height).to eq(20)
+    it 'initializes successfully' do
+      expect(flow_diagram).to be_a(Minigun::HUD::FlowDiagram)
+    end
+
+    it 'calculates dimensions from content' do
+      # FlowDiagram doesn't store frame dimensions, it calculates content dimensions
+      dims = flow_diagram.prepare_layout(nil)
+      expect(dims).to eq({ width: 0, height: 0 })
     end
   end
 
@@ -165,7 +170,7 @@ RSpec.describe Minigun::HUD do
 
     it 'initializes with pipeline' do
       expect(controller.terminal).to be_a(Minigun::HUD::Terminal)
-      expect(controller.flow_diagram).to be_a(Minigun::HUD::FlowDiagram)
+      expect(controller.flow_diagram).to be_a(Minigun::HUD::FlowDiagramFrame)
       expect(controller.process_list).to be_a(Minigun::HUD::ProcessList)
       expect(controller.stats_aggregator).to be_a(Minigun::HUD::StatsAggregator)
     end

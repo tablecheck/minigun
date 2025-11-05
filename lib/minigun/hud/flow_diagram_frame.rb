@@ -87,7 +87,7 @@ module Minigun
         # Get diagram dimensions
         dims = @flow_diagram.prepare_layout(stats_data)
         diagram_width = dims[:width]
-        diagram_height = dims[:diagram_height]  # Actual content height
+        diagram_height = dims[:height]
 
         # Calculate centering and panning offsets
         unless @user_panned

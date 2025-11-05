@@ -9,8 +9,8 @@ module Minigun
 
       def initialize(_frame_width, _frame_height)
         @animation_frame = 0
-        @diagram_width = 0  # Actual width of diagram content
-        @diagram_height = 0  # Actual height of diagram content
+        @width = 0  # Actual width of diagram content
+        @height = 0  # Actual height of diagram content
       end
 
       # Update dimensions (called on resize)
@@ -21,11 +21,11 @@ module Minigun
 
       # Calculate layout and return diagram dimensions
       def prepare_layout(stats_data)
-        return { width: 0, diagram_height: 0 } unless stats_data && stats_data[:stages]
+        return { width: 0, height: 0 } unless stats_data && stats_data[:stages]
 
         stages = stats_data[:stages]
         dag = stats_data[:dag]
-        return { width: 0, diagram_height: 0 } if stages.empty?
+        return { width: 0, height: 0 } if stages.empty?
 
         # Filter out router stages (internal implementation details)
         visible_stages = stages.reject { |s| s[:type] == :router }
@@ -38,13 +38,13 @@ module Minigun
         # Calculate actual diagram content height
         unless @cached_layout.empty?
           max_y = @cached_layout.values.map { |pos| pos[:y] + pos[:height] }.max
-          @diagram_height = max_y
+          @height = max_y
         else
-          @diagram_height = 0
+          @height = 0
         end
 
         # Return diagram dimensions
-        { width: @diagram_width, diagram_height: @diagram_height }
+        { width: @width, height: @height }
       end
 
       # Render the flow diagram to terminal at given position
@@ -121,11 +121,11 @@ module Minigun
           min_x = layout.values.map { |pos| pos[:x] }.min
           layout.each { |name, pos| pos[:x] -= min_x }
 
-          # Store actual diagram width for Controller to use for centering
+          # Store actual diagram width
           max_x = layout.values.map { |pos| pos[:x] + pos[:width] }.max
-          @diagram_width = max_x
+          @width = max_x
         else
-          @diagram_width = 0
+          @width = 0
         end
 
         layout
