@@ -42,13 +42,13 @@ Minigun is a high-performance data processing pipeline framework for Ruby with s
 ### Phase 1.01: HUD
 
 - [X] Initial HUD work:
-  - make a HUD inspired by htop to run as part of CLI
-  - two columns:
-    - LHS: flow diagram (ascii) on the other side, with ascii flow animations. make it inspired by cyberpunk (blade-runner/matrix/hackers)
-    - RHS: list of processes on one side
-  - use keys to navigate the hud.
-  - use ascii colors
-  - Before doing anything, plan it all out.
+  - [X] make a HUD inspired by htop to run as part of CLI
+  - [X] two columns:
+    - [X] LHS: flow diagram (ascii) on the other side, with ascii flow animations. make it inspired by cyberpunk (blade-runner/matrix/hackers)
+    - [X] RHS: list of processes on one side
+  - [X] use keys to navigate the hud.
+  - [X] use ascii colors
+  - [X] Before doing anything, plan it all out.
 
 - [X] Running hud
   - [X] task.hud to run in IRB/Rails console
@@ -57,11 +57,22 @@ Minigun is a high-performance data processing pipeline framework for Ruby with s
 - [ ] Add hud to all examples when running
   - [ ] Add idiomatic representation for each example
 
-- [ ] HUD IPC support
-  - [ ] Process tree, forked routing
+- [ ] HUD UI improvement
+  - [ ] Introduce Hud::DiagramStage and DiagramPipeline/Executor
+  - [ ] Re-add throughput and bottleneck icons to stages
+  - [ ] Improve animations, use 24-frame counter (or just int counter which rolls over?)
+  - [ ] Arrows on lines?
+  - [ ] fix up/down of stages (not clearing lines)
+  - [ ] auto-size width of stage columns
+  - [ ] p95 rather than p99?
+  - [ ] HUD IPC support
+    - [ ] Process tree, forked routing
+    - [ ] process wrappers
 
 - [ ] HUD QoL
   - [ ] % completion metrics
+  - [ ] CPU / MEM / disk / processes / queues
+  - [ ] tab menu?
   - [ ] Error/log stream at bottom
 
 
