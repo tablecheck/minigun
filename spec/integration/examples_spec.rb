@@ -107,10 +107,10 @@ RSpec.describe 'Examples Integration' do
       pipeline = FanOutPipeline.new
       pipeline.run
 
-      # Each consumer should receive all 3 items
-      expect(pipeline.emails.size).to eq(3)
-      expect(pipeline.sms_messages.size).to eq(3)
-      expect(pipeline.push_notifications.size).to eq(3)
+      # Each consumer should receive all 8 items (expanded for HUD visualization)
+      expect(pipeline.emails.size).to eq(8)
+      expect(pipeline.sms_messages.size).to eq(8)
+      expect(pipeline.push_notifications.size).to eq(8)
 
       # Verify content
       expect(pipeline.emails.first).to include('Alice')

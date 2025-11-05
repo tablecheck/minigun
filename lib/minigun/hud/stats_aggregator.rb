@@ -45,6 +45,9 @@ module Minigun
           }
         end
 
+        # Get DAG structure
+        dag_info = extract_dag_info
+
         # Pipeline summary
         {
           pipeline_name: @pipeline.name,
@@ -53,6 +56,7 @@ module Minigun
           total_consumed: stats.total_consumed,
           throughput: stats.throughput,
           stages: stages_data,
+          dag: dag_info,
           bottleneck: bottleneck_stage ? {
             stage: bottleneck_stage.stage_name,
             throughput: bottleneck_stage.throughput
@@ -62,6 +66,29 @@ module Minigun
       end
 
       private
+
+      def extract_dag_info
+        dag = @pipeline.dag
+        return nil unless dag
+
+        # Extract edges (connections between stages)
+        edges = []
+        dag.nodes.each do |from_stage|
+          targets = dag.edges[from_stage] || []
+          targets.each do |to_stage|
+            edges << {
+              from: from_stage.name,
+              to: to_stage.name
+            }
+          end
+        end
+
+        {
+          edges: edges,
+          sources: dag.sources.map(&:name),
+          terminals: dag.terminals.map(&:name)
+        }
+      end
 
       def determine_stage_type(stage)
         return :producer if stage.is_a?(Minigun::ProducerStage)

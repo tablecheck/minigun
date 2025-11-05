@@ -170,11 +170,12 @@ module Minigun
           "",
           "  Navigation:",
           "    ↑ / ↓     - Scroll process list",
+          "    w / s     - Pan diagram up/down",
+          "    a / d     - Pan diagram left/right",
           "",
           "  Controls:",
           "    SPACE     - Pause/Resume updates",
           "    r / R     - Force refresh/resize",
-          "    d / D     - Toggle details (future)",
           "    c / C     - Compact view (future)",
           "",
           "  Other:",
@@ -219,14 +220,23 @@ module Minigun
         when 'r', 'R' # Force refresh
           @resize_requested = true
 
-        when :up # Scroll up
+        when :up # Scroll up (process list)
           @process_list.scroll_offset = [@process_list.scroll_offset - 1, 0].max
 
-        when :down # Scroll down
+        when :down # Scroll down (process list)
           @process_list.scroll_offset += 1
 
-        when 'd', 'D' # Toggle details
-          # Future: implement detail view
+        when 'w', 'W' # Pan diagram up (move content up, see what's below)
+          @flow_diagram.pan(0, 2)
+
+        when 'a', 'A' # Pan diagram left (move content left, see what's right)
+          @flow_diagram.pan(2, 0)
+
+        when 's', 'S' # Pan diagram down (move content down, see what's above)
+          @flow_diagram.pan(0, -2)
+
+        when 'd', 'D' # Pan diagram right (move content right, see what's left)
+          @flow_diagram.pan(-2, 0)
 
         when 'c', 'C' # Compact view
           # Future: implement compact view

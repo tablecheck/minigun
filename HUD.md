@@ -108,14 +108,15 @@ hud_thread.join
 | `h` / `H` / `?` | Toggle help overlay (disabled when finished) |
 | `r` / `R` | Force refresh / recalculate layout (disabled when finished) |
 | `↑` / `↓` | Scroll process list |
-| `d` / `D` | Toggle detailed view (future) |
+| `w` / `s` | Pan flow diagram up/down |
+| `a` / `d` | Pan flow diagram left/right |
 | `c` / `C` | Compact view (future) |
 
 ## Display Elements
 
 ### Flow Diagram (Left Panel)
 
-The left panel shows your pipeline stages as boxes with animated connections:
+The left panel shows your pipeline stages as boxes with animated connections. Use `w`/`a`/`s`/`d` keys to pan the diagram for large pipelines.
 
 ```
   ┌─────────────────┐
@@ -157,6 +158,21 @@ The left panel shows your pipeline stages as boxes with animated connections:
 - Horizontal lines pulse with dashed patterns: `─╌┄┈`
 - Inactive connections shown as static gray lines
 - Flow direction top-to-bottom through pipeline stages
+- Fan-out patterns use proper split/fork characters: `┬ ┼` for tree-like visualization
+
+**Example Fan-Out Pattern:**
+```
+     ┌──────────┐
+     │ producer │
+     └──────────┘
+           │
+       ┬───┴───┬
+       │   │   │
+   ┌───┘   │   └───┐
+┌──────┐┌──────┐┌──────┐
+│cons1 ││cons2 ││cons3 │
+└──────┘└──────┘└──────┘
+```
 
 ### Process Statistics (Right Panel)
 
