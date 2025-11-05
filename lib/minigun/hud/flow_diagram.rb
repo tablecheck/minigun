@@ -32,15 +32,15 @@ module Minigun
           @needs_clear = false
         end
 
-        # Draw title
-        title = "PIPELINE FLOW"
-        terminal.write_at(x_offset + 2, y_offset, title, color: Theme.border_active + Terminal::COLORS[:bold])
-
         stages = stats_data[:stages]
+        dag = stats_data[:dag]
         return if stages.empty?
 
-        # Calculate layout (boxes with positions)
-        layout = calculate_layout(stages)
+        # Filter out router stages (internal implementation details)
+        visible_stages = stages.reject { |s| s[:type] == :router }
+
+        # Calculate layout (boxes with positions) using DAG structure
+        layout = calculate_layout(visible_stages, dag)
 
         # Clamp pan offsets to prevent panning outside the diagram bounds
         clamp_pan_offsets(layout)
@@ -51,11 +51,11 @@ module Minigun
         view_y_offset = y_offset - @pan_y
 
         # Render connections first (so they appear behind boxes)
-        render_connections(terminal, layout, stages, view_x_offset, view_y_offset)
+        render_connections(terminal, layout, visible_stages, dag, view_x_offset, view_y_offset)
 
         # Render stage boxes
         layout.each do |stage_name, pos|
-          stage_data = stages.find { |s| s[:stage_name] == stage_name }
+          stage_data = visible_stages.find { |s| s[:stage_name] == stage_name }
           next unless stage_data
 
           render_stage_box(terminal, stage_data, pos, view_x_offset, view_y_offset)
@@ -103,38 +103,29 @@ module Minigun
       end
 
       # Calculate box positions using DAG-based layered layout
-      def calculate_layout(stages)
+      def calculate_layout(stages, dag)
         layout = {}
         box_width = 14
         box_height = 3
         layer_height = 4  # Vertical spacing between layers
         box_spacing = 2   # Horizontal spacing between boxes
 
-        # Build adjacency list from stages (fallback if no DAG info)
-        stage_names = stages.map { |s| s[:stage_name] }
+        # Calculate layers based on DAG topological depth
+        layers = calculate_layers_from_dag(stages, dag)
 
-        # Calculate layers based on topological depth
-        layers = calculate_layers(stages)
-
-        # Position stages in each layer
+        # Position stages in each layer (centered relative to each other)
         layers.each_with_index do |layer_stages, layer_idx|
           y = 2 + (layer_idx * layer_height)
-
-          # Skip if layer would be off-screen
-          next if y + box_height >= @height
 
           # Calculate total width needed for this layer
           total_width = (layer_stages.size * box_width) + ((layer_stages.size - 1) * box_spacing)
 
-          # Start X position (center the layer)
-          start_x = [(@width - total_width) / 2, 1].max
+          # Center this layer horizontally (within a large virtual canvas)
+          start_x = (@width - total_width) / 2
 
           # Position each stage in the layer horizontally
           layer_stages.each_with_index do |stage_name, stage_idx|
             x = start_x + (stage_idx * (box_width + box_spacing))
-
-            # Ensure it fits
-            next if x + box_width >= @width
 
             layout[stage_name] = {
               x: x,
@@ -146,77 +137,162 @@ module Minigun
           end
         end
 
+        # Normalize: shift entire diagram left so leftmost item is at x=0
+        unless layout.empty?
+          min_x = layout.values.map { |pos| pos[:x] }.min
+          layout.each { |name, pos| pos[:x] -= min_x }
+        end
+
         layout
       end
 
-      # Calculate layers (topological depth) for each stage
-      def calculate_layers(stages)
+      # Calculate layers using topological depth from DAG
+      def calculate_layers_from_dag(stages, dag)
         stage_names = stages.map { |s| s[:stage_name] }
-        stage_map = stages.map { |s| [s[:stage_name], s] }.to_h
 
-        # Build dependency map (who depends on whom)
-        dependencies = {}
-        stage_names.each { |name| dependencies[name] = [] }
+        # Return single vertical stack if no DAG info
+        return stage_names.map { |name| [name] } unless dag && dag[:edges]
 
-        # For simple fan-out detection: find stages with same type that appear consecutively
-        # This is a heuristic for when DAG edges aren't available
-        producers = stages.select { |s| s[:type] == :producer }.map { |s| s[:stage_name] }
-        consumers = stages.select { |s| s[:type] == :consumer }.map { |s| s[:stage_name] }
-        routers = stages.select { |s| s[:type] == :router }.map { |s| s[:stage_name] }
+        # Build adjacency lists
+        edges = dag[:edges] || []
+        sources = dag[:sources] || []
 
-        # Assign to layers
-        layers = []
+        # Bridge router stages: when filtering them out, connect their inputs to their outputs
+        # This preserves connectivity after removing intermediate router nodes
+        bridged_edges = []
+        edges.each do |edge|
+          from_visible = stage_names.include?(edge[:from])
+          to_visible = stage_names.include?(edge[:to])
 
-        # Layer 0: Producers
-        layers << producers if producers.any?
+          if from_visible && to_visible
+            # Both endpoints visible, keep edge as-is
+            bridged_edges << edge
+          elsif !from_visible && !to_visible
+            # Both hidden (routers), skip
+            next
+          elsif from_visible && !to_visible
+            # Source visible, target is router - find router's outputs
+            router_outputs = edges.select { |e| e[:from] == edge[:to] }
+            router_outputs.each do |router_edge|
+              if stage_names.include?(router_edge[:to])
+                # Bridge: connect source directly to router's output
+                bridged_edges << { from: edge[:from], to: router_edge[:to] }
+              end
+            end
+          elsif !from_visible && to_visible
+            # Source is router, target visible - find router's inputs
+            router_inputs = edges.select { |e| e[:to] == edge[:from] }
+            router_inputs.each do |router_edge|
+              if stage_names.include?(router_edge[:from])
+                # Bridge: connect router's input directly to target
+                bridged_edges << { from: router_edge[:from], to: edge[:to] }
+              end
+            end
+          end
+        end
 
-        # Layer 1: Routers (if any)
-        layers << routers if routers.any?
+        edges = bridged_edges.uniq
 
-        # Layer 2: Consumers (parallel)
-        layers << consumers if consumers.any?
+        # Build forward edges map (from -> [to1, to2, ...])
+        forward_edges = Hash.new { |h, k| h[k] = [] }
+        edges.each { |e| forward_edges[e[:from]] << e[:to] }
 
-        # If no clear structure, just stack vertically
-        if layers.flatten.size != stage_names.size
-          return stage_names.map { |name| [name] }
+        # Build reverse edges map (to -> [from1, from2, ...])
+        reverse_edges = Hash.new { |h, k| h[k] = [] }
+        edges.each { |e| reverse_edges[e[:to]] << e[:from] }
+
+        # Calculate depth for each stage using longest path from sources
+        depths = {}
+
+        # BFS to assign depths
+        queue = sources.select { |s| stage_names.include?(s) }.map { |s| [s, 0] }
+
+        while !queue.empty?
+          stage, depth = queue.shift
+
+          # Update depth if this path is longer
+          if !depths[stage] || depth > depths[stage]
+            depths[stage] = depth
+
+            # Queue downstream stages
+            forward_edges[stage].each do |next_stage|
+              queue << [next_stage, depth + 1]
+            end
+          end
+        end
+
+        # Assign depth 0 to any stages not reached (orphans)
+        stage_names.each do |name|
+          depths[name] ||= 0
+        end
+
+        # Group stages by depth into layers
+        max_depth = depths.values.max || 0
+        layers = Array.new(max_depth + 1) { [] }
+
+        stage_names.each do |name|
+          layers[depths[name]] << name
         end
 
         layers.reject(&:empty?)
       end
 
-      # Render connections between stages
-      def render_connections(terminal, layout, stages, x_offset, y_offset)
-        # Group stages by layer to identify fan-out patterns
-        stages_by_layer = layout.values.group_by { |pos| pos[:layer] }
-        stage_map = stages.map { |s| [s[:stage_name], s] }.to_h
+      # Render connections between stages using DAG edges
+      def render_connections(terminal, layout, stages, dag, x_offset, y_offset)
+        return unless dag && dag[:edges]
 
-        # For each stage, find its downstream targets
-        layout.each do |from_name, from_pos|
+        stage_map = stages.map { |s| [s[:stage_name], s] }.to_h
+        stage_names = stages.map { |s| s[:stage_name] }
+
+        # Bridge router stages to preserve connectivity
+        all_edges = dag[:edges]
+        bridged_edges = []
+
+        all_edges.each do |edge|
+          from_visible = stage_names.include?(edge[:from])
+          to_visible = stage_names.include?(edge[:to])
+
+          if from_visible && to_visible
+            bridged_edges << edge
+          elsif from_visible && !to_visible
+            # Source visible, target is router - find router's outputs
+            router_outputs = all_edges.select { |e| e[:from] == edge[:to] }
+            router_outputs.each do |router_edge|
+              if stage_names.include?(router_edge[:to])
+                bridged_edges << { from: edge[:from], to: router_edge[:to] }
+              end
+            end
+          elsif !from_visible && to_visible
+            # Source is router, target visible - find router's inputs
+            router_inputs = all_edges.select { |e| e[:to] == edge[:from] }
+            router_inputs.each do |router_edge|
+              if stage_names.include?(router_edge[:from])
+                bridged_edges << { from: router_edge[:from], to: edge[:to] }
+              end
+            end
+          end
+        end
+
+        edges = bridged_edges.uniq
+
+        # Group edges by source
+        edges_by_source = edges.group_by { |e| e[:from] }
+
+        # Render each source's connections
+        edges_by_source.each do |from_name, from_edges|
+          from_pos = layout[from_name]
+          next unless from_pos
+
           stage_data = stage_map[from_name]
           next unless stage_data
 
-          # Find downstream stages (next layer)
-          next_layer = from_pos[:layer] + 1
-          next_layer_stages = stages_by_layer[next_layer]
-          next unless next_layer_stages
-
-          # For producers/routers, connect to all stages in next layer (fan-out)
-          # For others, connect to next stage only
-          targets = if [:producer, :router].include?(stage_data[:type])
-                      next_layer_stages.map { |pos| layout.key(pos) }
-                    else
-                      # Find the next stage in sequence
-                      stage_idx = stages.index(stage_data)
-                      next_stage = stages[stage_idx + 1] if stage_idx
-                      next_stage ? [next_stage[:stage_name]] : []
-                    end
-
-          next if targets.empty?
-
           # Get target positions
-          target_positions = targets.map { |name| layout[name] }.compact
+          target_names = from_edges.map { |e| e[:to] }
+          target_positions = target_names.map { |name| layout[name] }.compact
 
-          # Draw fan-out connection
+          next if target_positions.empty?
+
+          # Draw fan-out connection or single connection
           if target_positions.size > 1
             render_fanout_connection(terminal, from_pos, target_positions, stage_data, x_offset, y_offset)
           else
@@ -234,30 +310,31 @@ module Minigun
         active = stage_data[:throughput] && stage_data[:throughput] > 0
         color = active ? Theme.primary : Theme.muted
 
-        # Calculate split point (midway between source and targets)
+        # Calculate split point (horizontal spine where fan-out occurs)
         first_target_y = target_positions.first[:y]
         split_y = from_y + 1
 
         # Draw vertical line from source to split point
         terminal.write_at(x_offset + from_x, y_offset + from_y, "│", color: color)
 
-        # Get X positions of all targets
+        # Get X positions of all targets (sorted)
         target_xs = target_positions.map { |pos| pos[:x] + pos[:width] / 2 }.sort
         leftmost_x = target_xs.first
         rightmost_x = target_xs.last
 
-        # Draw horizontal line across all targets
+        # Draw horizontal spine with T-junctions
         (leftmost_x..rightmost_x).each do |x|
           next if x < 0 || x >= @width
 
-          # Determine the character based on position
+          # Determine the proper box-drawing character
           char = if x == from_x && target_xs.include?(x)
-                   "┼"  # Source is aligned with a target
+                   "┼"  # 4-way junction (source aligned with a target)
                  elsif x == from_x
-                   "┬"  # Source drops down to horizontal
+                   "┴"  # T-junction: vertical from above meets horizontal spine
                  elsif target_xs.include?(x)
-                   "┬"  # Target drops down from horizontal
+                   "┬"  # T-junction: horizontal spine branches down
                  else
+                   # Regular horizontal line (spine)
                    if active
                      offset = (@animation_frame / 4) % 4
                      ["─", "╌", "┄", "┈"][offset]
@@ -381,8 +458,7 @@ module Minigun
                          name.to_s
                        end
 
-        # Status indicator and icon
-        indicator = Theme.status_indicator(status)
+        # Icon only (no status indicator for clean layout)
         icon = Theme.stage_icon(type)
 
         # Color based on status
@@ -403,8 +479,8 @@ module Minigun
         # Top border
         terminal.write_at(x_offset + x, y_offset + y, "┌" + ("─" * (w - 2)) + "┐", color: Theme.border)
 
-        # Middle line with content
-        content = "#{icon} #{display_name} #{indicator}"
+        # Middle line with content (icon + name, no status indicator)
+        content = "#{icon} #{display_name}"
         padding_left = [(w - content.length - 2) / 2, 1].max
         padding_right = [w - content.length - padding_left - 2, 1].max
 
@@ -412,21 +488,8 @@ module Minigun
                          "│" + (" " * padding_left) + content + (" " * padding_right) + "│",
                          color: color)
 
-        # Bottom border with throughput if available
+        # Bottom border (no throughput for clean layout)
         bottom_line = "└" + ("─" * (w - 2)) + "┘"
-
-        if stage_data[:throughput] && stage_data[:throughput] > 0
-          throughput_text = format_throughput(stage_data[:throughput])
-          label = " #{throughput_text}/s "
-
-          if label.length <= w - 4
-            # Center the label in the bottom border
-            padding_left = (w - label.length - 2) / 2
-            padding_right = w - label.length - padding_left - 2
-            bottom_line = "└" + ("─" * padding_left) + label + ("─" * padding_right) + "┘"
-          end
-        end
-
         terminal.write_at(x_offset + x, y_offset + y + 2, bottom_line, color: Theme.border)
       end
 
