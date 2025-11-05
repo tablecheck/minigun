@@ -7,18 +7,16 @@ module Minigun
     # Renders pipeline DAG as animated ASCII flow diagram with boxes and connections
     class FlowDiagram
 
-      def initialize(width, height)
-        @width = width
-        @height = height
+      def initialize(_frame_width, _frame_height)
         @animation_frame = 0
         @diagram_width = 0  # Actual width of diagram content
         @diagram_height = 0  # Actual height of diagram content
       end
 
       # Update dimensions (called on resize)
-      def resize(width, height)
-        @width = width
-        @height = height
+      def resize(_frame_width, _frame_height)
+        # Dimensions not used - diagram renders in coordinate space starting at (0,0)
+        # FlowDiagramFrame handles viewport sizing and clipping via ClippedTerminal
       end
 
       # Calculate layout and return diagram dimensions
@@ -89,6 +87,11 @@ module Minigun
         # Calculate layers based on DAG topological depth
         layers = calculate_layers_from_dag(stages, dag)
 
+        # Find maximum layer width to center layers relative to each other
+        max_layer_width = layers.map do |layer_stages|
+          (layer_stages.size * box_width) + ((layer_stages.size - 1) * box_spacing)
+        end.max || 0
+
         # Position stages in each layer (centered relative to each other)
         layers.each_with_index do |layer_stages, layer_idx|
           y = 0 + (layer_idx * layer_height)
@@ -96,8 +99,8 @@ module Minigun
           # Calculate total width needed for this layer
           total_width = (layer_stages.size * box_width) + ((layer_stages.size - 1) * box_spacing)
 
-          # Center this layer horizontally (within a large virtual canvas)
-          start_x = (@width - total_width) / 2
+          # Center this layer relative to the widest layer
+          start_x = (max_layer_width - total_width) / 2
 
           # Position each stage in the layer horizontally
           layer_stages.each_with_index do |stage_name, stage_idx|
