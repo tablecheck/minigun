@@ -38,6 +38,17 @@ Minigun is a high-performance data processing pipeline framework for Ruby with s
   - [ ] Transmit logs across forks--look at Puma
   - [ ] Support MINIGUN_LOG_LEVEL var
 
+
+### Phase 1.01: HUD
+
+- make a HUD inspired by htop to run as part of CLI
+- two columns:
+  - LHS: flow diagram (ascii) on the other side, with ascii flow animations. make it inspired by cyberpunk (blade-runner/matrix/hackers)
+  - RHS: list of processes on one side
+- use keys to navigate the hud.
+- use ascii colors
+- Before doing anything, plan it all out.
+
 ### Phase 1.1: QoL Improvements
 
 - [ ] **Graceful shutdown**

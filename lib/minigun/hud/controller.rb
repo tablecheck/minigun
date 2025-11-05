@@ -1,0 +1,193 @@
+# frozen_string_literal: true
+
+require 'io/console'
+
+module Minigun
+  module HUD
+    # Main HUD controller - orchestrates all components
+    class Controller
+      FPS = 15 # Refresh rate
+      FRAME_TIME = 1.0 / FPS
+
+      attr_reader :terminal, :flow_diagram, :process_list, :stats_aggregator
+      attr_accessor :running, :paused
+
+      def initialize(pipeline)
+        @pipeline = pipeline
+        @terminal = Terminal.new
+        @stats_aggregator = StatsAggregator.new(pipeline)
+        @running = false
+        @paused = false
+        @show_help = false
+
+        # Calculate layout (2-column split)
+        calculate_layout
+      end
+
+      # Start the HUD
+      def start
+        @running = true
+        @terminal.setup
+
+        # Render initial screen
+        render_frame
+
+        # Main event loop
+        loop do
+          frame_start = Time.now
+
+          # Handle keyboard input
+          handle_input
+          break unless @running
+
+          # Update and render if not paused
+          unless @paused
+            render_frame
+          end
+
+          # Sleep to maintain consistent FPS
+          elapsed = Time.now - frame_start
+          sleep([FRAME_TIME - elapsed, 0].max)
+        end
+      ensure
+        @terminal.teardown
+      end
+
+      # Stop the HUD
+      def stop
+        @running = false
+      end
+
+      private
+
+      def calculate_layout
+        @terminal.update_size
+        width = @terminal.width
+        height = @terminal.height
+
+        # Split screen: 40% left (flow), 60% right (stats)
+        @left_width = (width * 0.4).to_i
+        @right_width = width - @left_width
+
+        # Components
+        @flow_diagram = FlowDiagram.new(@left_width - 2, height - 4)
+        @process_list = ProcessList.new(@right_width - 2, height - 4)
+      end
+
+      def render_frame
+        # Collect fresh stats
+        stats_data = @stats_aggregator.collect
+        return unless stats_data
+
+        # Draw boxes
+        @terminal.draw_box(1, 1, @left_width, @terminal.height - 2,
+                           title: "FLOW DIAGRAM", color: Theme.border)
+
+        @terminal.draw_box(@left_width + 1, 1, @right_width, @terminal.height - 2,
+                           title: "PROCESS STATISTICS", color: Theme.border)
+
+        # Render flow diagram (left panel)
+        @flow_diagram.render(@terminal, stats_data, x_offset: 1, y_offset: 2)
+
+        # Render process list (right panel)
+        @process_list.render(@terminal, stats_data, x_offset: @left_width + 1, y_offset: 2)
+
+        # Status bar at bottom
+        render_status_bar
+
+        # Help overlay
+        render_help_overlay if @show_help
+
+        # Flush to screen
+        @terminal.render
+      end
+
+      def render_status_bar
+        y = @terminal.height - 1
+        status_text = if @paused
+                        "#{Theme.warning}PAUSED#{Terminal::COLORS[:reset]}"
+                      else
+                        "#{Theme.success}RUNNING#{Terminal::COLORS[:reset]}"
+                      end
+
+        # Left side: status and pipeline name
+        left_text = "#{status_text} | Pipeline: #{Theme.info}#{@pipeline.name}#{Terminal::COLORS[:reset]}"
+        @terminal.write_at(2, y, left_text)
+
+        # Right side: controls hint
+        right_text = "[h] Help [q] Quit [space] Pause"
+        @terminal.write_at(@terminal.width - right_text.length - 2, y, right_text, color: Theme.muted)
+      end
+
+      def render_help_overlay
+        # Center overlay
+        overlay_width = 60
+        overlay_height = 16
+        x = (@terminal.width - overlay_width) / 2
+        y = (@terminal.height - overlay_height) / 2
+
+        # Draw help box
+        @terminal.draw_box(x, y, overlay_width, overlay_height,
+                           title: "KEYBOARD CONTROLS", color: Theme.border_active)
+
+        # Help content
+        help_lines = [
+          "",
+          "  Navigation:",
+          "    ↑ / ↓     - Scroll process list",
+          "    ← / →     - Switch panels",
+          "",
+          "  Controls:",
+          "    SPACE     - Pause/Resume",
+          "    r / R     - Force refresh",
+          "    d / D     - Toggle details",
+          "    c / C     - Compact view",
+          "",
+          "  Other:",
+          "    h / H / ? - Toggle this help",
+          "    q / Q     - Quit",
+          "",
+          "  Press any key to close..."
+        ]
+
+        help_lines.each_with_index do |line, index|
+          @terminal.write_at(x + 2, y + index + 1, line, color: Theme.text)
+        end
+      end
+
+      def handle_input
+        key = Keyboard.read_nonblocking
+        return unless key
+
+        case key
+        when 'q', 'Q', "\u0003" # q, Q, or Ctrl+C
+          @running = false
+
+        when ' ' # Space - pause/resume
+          @paused = !@paused
+
+        when 'h', 'H', '?' # Help
+          @show_help = !@show_help
+
+        when 'r', 'R' # Force refresh
+          calculate_layout
+
+        when :up # Scroll up
+          @process_list.scroll_offset = [@process_list.scroll_offset - 1, 0].max
+
+        when :down # Scroll down
+          @process_list.scroll_offset += 1
+
+        when 'd', 'D' # Toggle details
+          # Future: implement detail view
+
+        when 'c', 'C' # Compact view
+          # Future: implement compact view
+        end
+      rescue StandardError => e
+        # Log error but don't crash HUD
+        warn "Error handling input: #{e.message}"
+      end
+    end
+  end
+end
