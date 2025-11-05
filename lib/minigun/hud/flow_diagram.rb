@@ -107,7 +107,7 @@ module Minigun
         layout = {}
         box_width = 14
         box_height = 3
-        layer_height = 4  # Vertical spacing between layers
+        layer_height = 5  # Vertical spacing between layers (room for connection spine)
         box_spacing = 2   # Horizontal spacing between boxes
 
         # Calculate layers based on DAG topological depth
