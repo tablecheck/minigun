@@ -88,7 +88,7 @@ module Minigun
         if @flow_diagram
           @flow_diagram.resize(@left_width - 2, height - 4)
         else
-          @flow_diagram = FlowDiagram.new(@left_width - 2, height - 4)
+          @flow_diagram = FlowDiagramFrame.new(@left_width - 2, height - 4)
         end
 
         # Preserve scroll offset if process_list exists
@@ -120,7 +120,7 @@ module Minigun
                            title: "PROCESS STATISTICS", color: Theme.border)
 
         # Render flow diagram (left panel)
-        # Clear panel if diagram needs it (e.g., after panning)
+        # Clear panel if frame needs it (e.g., after panning)
         if @flow_diagram.needs_clear?
           panel_height = @terminal.height - 4
           (0...panel_height).each do |y|
@@ -129,10 +129,7 @@ module Minigun
           @flow_diagram.mark_cleared
         end
 
-        # Prepare layout (handles centering internally via pan offsets)
-        @flow_diagram.prepare_layout(stats_data, auto_center: true)
-
-        # Render at base panel position (FlowDiagram uses pan offsets for centering)
+        # Render diagram - frame handles centering and panning
         @flow_diagram.render(@terminal, stats_data, x_offset: 2, y_offset: 2)
 
         # Render process list (right panel)

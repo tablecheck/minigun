@@ -12,33 +12,17 @@ module Minigun
         @width = width
         @height = height
         @animation_frame = 0
-        @pan_x = 0  # Horizontal pan offset
-        @pan_y = 0  # Vertical pan offset
-        @needs_clear = false  # Flag to indicate if we need to clear before rendering
-        @user_panned = false  # Track if user has manually panned
-        @diagram_width = 0  # Actual width of diagram content (for centering)
+        @diagram_width = 0  # Actual width of diagram content
       end
 
       # Update dimensions (called on resize)
       def resize(width, height)
         @width = width
         @height = height
-        # Don't reset pan offsets here - prepare_layout will recalculate centering
-        # on next frame if user hasn't manually panned
-        @needs_clear = true
-      end
-
-      # Pan the diagram
-      def pan(dx, dy)
-        @pan_x += dx
-        @pan_y += dy
-        @user_panned = true  # Mark that user has manually panned
-        @needs_clear = true  # Mark that we need to clear on next render
       end
 
       # Calculate layout and return diagram dimensions
-      # This allows Controller to determine centering before rendering
-      def prepare_layout(stats_data, auto_center: false)
+      def prepare_layout(stats_data)
         return { width: 0, height: 0 } unless stats_data && stats_data[:stages]
 
         stages = stats_data[:stages]
@@ -53,49 +37,26 @@ module Minigun
         @cached_visible_stages = visible_stages
         @cached_dag = dag
 
-        # Initialize pan to centered position if requested and not manually panned
-        if auto_center && !@user_panned
-          center_diagram_in_viewport(@cached_layout)
-        end
-
-        # Clamp pan offsets to prevent panning outside the diagram bounds
-        clamp_pan_offsets(@cached_layout)
-
         # Return diagram dimensions
         { width: @diagram_width, height: @height }
       end
 
-      # Check if diagram needs clearing (for Controller to handle)
-      def needs_clear?
-        @needs_clear
-      end
-
-      # Mark as cleared (called by Controller after clearing)
-      def mark_cleared
-        @needs_clear = false
-      end
-
-      # Render the flow diagram to terminal
+      # Render the flow diagram to terminal at given position
       def render(terminal, stats_data, x_offset: 0, y_offset: 0)
         # If prepare_layout wasn't called, do it now
         prepare_layout(stats_data) unless @cached_layout
 
         return unless @cached_layout
 
-        # Apply pan offset: shift all positions
-        # Pan acts as a viewport offset - positive pan moves viewport right (content appears left)
-        view_x_offset = x_offset - @pan_x
-        view_y_offset = y_offset - @pan_y
-
         # Render connections first (so they appear behind boxes)
-        render_connections(terminal, @cached_layout, @cached_visible_stages, @cached_dag, view_x_offset, view_y_offset)
+        render_connections(terminal, @cached_layout, @cached_visible_stages, @cached_dag, x_offset, y_offset)
 
         # Render stage boxes
         @cached_layout.each do |stage_name, pos|
           stage_data = @cached_visible_stages.find { |s| s[:stage_name] == stage_name }
           next unless stage_data
 
-          render_stage_box(terminal, stage_data, pos, view_x_offset, view_y_offset)
+          render_stage_box(terminal, stage_data, pos, x_offset, y_offset)
         end
 
         # Update animation
@@ -108,76 +69,6 @@ module Minigun
       end
 
       private
-
-      # Clear the diagram area to prevent ghost trails when panning
-      def clear_diagram_area(terminal, x_offset, y_offset)
-        # Clear entire diagram area including title line
-        (0...@height).each do |y|
-          terminal.write_at(x_offset, y_offset + y, " " * @width)
-        end
-      end
-
-      # Center diagram in viewport by setting pan offsets
-      def center_diagram_in_viewport(layout)
-        return if layout.empty?
-
-        # Calculate diagram dimensions
-        min_x = layout.values.map { |pos| pos[:x] }.min
-        max_x = layout.values.map { |pos| pos[:x] + pos[:width] }.max
-        min_y = layout.values.map { |pos| pos[:y] }.min
-        max_y = layout.values.map { |pos| pos[:y] + pos[:height] }.max
-
-        diagram_width = max_x - min_x
-        diagram_height = max_y - min_y
-
-        # Center horizontally if diagram is narrower than viewport
-        # Pan is negative of offset: to shift right by X, pan left by -X
-        if diagram_width < @width
-          center_offset_x = (@width - diagram_width) / 2
-          @pan_x = -center_offset_x
-        else
-          @pan_x = 0
-        end
-
-        # Center vertically if diagram is shorter than viewport
-        if diagram_height < @height
-          center_offset_y = (@height - diagram_height) / 2
-          @pan_y = -center_offset_y
-        else
-          @pan_y = 0
-        end
-      end
-
-      # Clamp pan offsets based on diagram and panel dimensions
-      def clamp_pan_offsets(layout)
-        return if layout.empty?
-
-        # Find diagram bounds
-        min_x = layout.values.map { |pos| pos[:x] }.min
-        max_x = layout.values.map { |pos| pos[:x] + pos[:width] }.max
-        min_y = layout.values.map { |pos| pos[:y] }.min
-        max_y = layout.values.map { |pos| pos[:y] + pos[:height] }.max
-
-        # Calculate diagram dimensions
-        diagram_width = max_x - min_x
-        diagram_height = max_y - min_y
-
-        # Horizontal panning limits:
-        # - Wide diagram: pan from 0 to (diagram_width - panel_width) to see both edges
-        # - Narrow diagram: pan from (diagram_width - panel_width) to 0 to align right edge with right border
-        delta_x = diagram_width - @width
-        min_pan_x = [delta_x, 0].min  # Negative for narrow diagrams
-        max_pan_x = [delta_x, 0].max  # Positive for wide diagrams
-
-        # Vertical panning limits (same logic):
-        delta_y = diagram_height - @height
-        min_pan_y = [delta_y, 0].min
-        max_pan_y = [delta_y, 0].max
-
-        # Apply clamping
-        @pan_x = [[@pan_x, min_pan_x].max, max_pan_x].min
-        @pan_y = [[@pan_y, min_pan_y].max, max_pan_y].min
-      end
 
       # Calculate box positions using DAG-based layered layout
       def calculate_layout(stages, dag)
