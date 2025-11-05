@@ -12,14 +12,20 @@ class HudDemoTask
   include Minigun::DSL
 
   pipeline do
-    # Producer - generates numbers
+    # Producer - generates numbers infinitely
     producer :generator do |output|
-      puts "Starting data generation..."
-      100.times do |i|
-        output << i
-        sleep 0.05 # Slow down to see animation
+      puts "Starting infinite data generation..."
+      puts "Press Ctrl+C or 'q' in the HUD to stop"
+
+      counter = 0
+      loop do
+        output << counter
+        counter += 1
+
+        # Vary the sleep time to create interesting throughput patterns
+        sleep_time = 0.01 + (Math.sin(counter / 20.0).abs * 0.05)
+        sleep sleep_time
       end
-      puts "Generation complete!"
     end
 
     # Processor - transforms data
@@ -43,53 +49,44 @@ class HudDemoTask
 
     # Consumer - process batches
     consumer :processor, threads: 2 do |batch, _output|
-      # Simulate batch processing
-      sleep 0.1
-      puts "Processed batch of #{batch.size} items"
+      # Simulate batch processing with varying latency
+      sleep 0.05 + rand(0.1)
+      # Uncomment to see batch processing messages
+      # puts "Processed batch of #{batch.size} items (#{batch.first}..#{batch.last})"
     end
   end
 end
 
 # Run the demo
 puts "=" * 60
-puts "MINIGUN HUD DEMO"
+puts "MINIGUN HUD DEMO - INFINITE MODE"
 puts "=" * 60
 puts ""
-puts "This demo will show the HUD monitoring a pipeline in real-time."
-puts "The pipeline processes 100 numbers through multiple stages."
+puts "This demo shows the HUD monitoring a pipeline in real-time."
+puts "The pipeline continuously generates and processes data with"
+puts "varying latencies to demonstrate different performance patterns."
+puts ""
+puts "Features to observe:"
+puts "  - Real-time throughput metrics"
+puts "  - Animated flow diagram (left panel)"
+puts "  - Live performance statistics (right panel)"
+puts "  - Bottleneck detection"
+puts "  - Latency percentiles (P50, P99)"
 puts ""
 puts "Controls:"
 puts "  - Press SPACE to pause/resume"
 puts "  - Press 'h' for help"
-puts "  - Press 'q' to quit"
+puts "  - Press 'q' to quit (or Ctrl+C)"
+puts "  - Use ↑/↓ to scroll"
 puts ""
 puts "Starting in 3 seconds..."
 sleep 3
 
 # Create and run task with HUD
-task = HudDemoTask.new
-pipeline = task.pipelines.first
-
-# Start HUD in a thread
-hud = Minigun::HUD::Controller.new(pipeline)
-hud_thread = Thread.new { hud.start }
-
-# Give HUD time to initialize
-sleep 0.5
-
-# Run the pipeline
 begin
-  task.run
+  Minigun::HUD.run_with_hud(HudDemoTask)
 rescue Interrupt
   puts "\nInterrupted by user"
-ensure
-  # Keep HUD running for a moment to show final stats
-  sleep 2
-
-  # Stop HUD
-  hud.stop
-  hud_thread.join(timeout: 1)
-  hud_thread.kill if hud_thread.alive?
 end
 
 puts "\nDemo complete!"

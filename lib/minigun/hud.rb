@@ -38,15 +38,26 @@ module Minigun
       # Create task instance if class given
       task_instance = task.is_a?(Class) ? task.new : task
 
+      # Evaluate pipeline blocks if using DSL
+      if task_instance.respond_to?(:_evaluate_pipeline_blocks!, true)
+        task_instance.send(:_evaluate_pipeline_blocks!)
+      end
+
       # Get the pipeline from the task
-      # Assuming task responds to :pipelines or :pipeline
-      pipeline = if task_instance.respond_to?(:pipelines)
+      pipeline = if task_instance.respond_to?(:_minigun_task, true)
+                   # DSL-based task
+                   task_instance.instance_variable_get(:@_minigun_task)&.root_pipeline
+                 elsif task_instance.respond_to?(:pipelines)
                    task_instance.pipelines.first
                  elsif task_instance.respond_to?(:pipeline)
                    task_instance.pipeline
+                 elsif task_instance.respond_to?(:root_pipeline)
+                   task_instance.root_pipeline
                  else
-                   raise ArgumentError, "Task must have a pipeline or pipelines method"
+                   raise ArgumentError, "Task must have a pipeline accessible via _minigun_task, pipelines, pipeline, or root_pipeline"
                  end
+
+      raise ArgumentError, "No pipeline found in task" unless pipeline
 
       # Start HUD in a separate thread
       hud = Controller.new(pipeline)
@@ -59,13 +70,19 @@ module Minigun
         end
       end
 
+      # Give HUD time to initialize
+      sleep 0.1
+
       # Run the task
       begin
         task_instance.run
       ensure
+        # Keep HUD running for a moment to show final stats
+        sleep 1
+
         # Stop HUD
         hud.stop
-        hud_thread.join(timeout: 1)
+        hud_thread.join(1) # 1 second timeout
         hud_thread.kill if hud_thread.alive?
       end
     end
