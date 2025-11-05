@@ -92,7 +92,7 @@ module Minigun
 
         # Position stages in each layer (centered relative to each other)
         layers.each_with_index do |layer_stages, layer_idx|
-          y = 2 + (layer_idx * layer_height)
+          y = 0 + (layer_idx * layer_height)
 
           # Calculate total width needed for this layer
           total_width = (layer_stages.size * box_width) + ((layer_stages.size - 1) * box_spacing)

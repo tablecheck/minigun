@@ -103,17 +103,17 @@ RSpec.describe 'HUD Full Rendering' do
     it 'renders complete HUD with both panels' do
       expected = strip_ascii(<<-ASCII)
 ┌─ FLOW DIAGRAM ───────────────────────────────┐┌─ PROCESS STATISTICS ─────────────────────────────────────────────────┐
-│                                              ││ PROCESS STATS                                                        │
-│                                              ││ Runtime:     X.Xs | Throughput:      X.XX i
-│                                              ││ Produced: X | Consumed: X│
-│                ┌────────────┐                ││                                                                      │
-│                │ ▶ generate │                ││ STAGE                    ITEMS      THRU       P50       P99         │
-│                └────────────┘                ││ ──────────────────────────────────────────────────────────────────   │
-│                       │                      ││ ▶ generate          ⚡   X   X.XX/s         -         -         │
-│                       │                      ││ ◀ process           ⚠   X   X.XX/s    X.Xms    X.Xms         │
-│                ┌────────────┐                ││                                                                      │
-│                │ ◀ process  │                ││                                                                      │
+│                                              ││                                                                      │
+│                ┌────────────┐                ││ Runtime:     X.Xs | Throughput:      X.XX i
+│                │ ▶ generate │                ││ Produced: X | Consumed: X│
 │                └────────────┘                ││                                                                      │
+│                       │                      ││ STAGE                    ITEMS      THRU       P50       P99         │
+│                       │                      ││ ──────────────────────────────────────────────────────────────────   │
+│                ┌────────────┐                ││ ▶ generate          ⚡   X   X.XX/s         -         -         │
+│                │ ◀ process  │                ││ ◀ process           ⚠   X   X.XX/s    X.Xms    X.Xms         │
+│                └────────────┘                ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
 │                                              ││                                                                      │
 │                                              ││                                                                      │
 │                                              ││                                                                      │

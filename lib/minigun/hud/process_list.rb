@@ -18,7 +18,7 @@ module Minigun
         return unless stats_data
 
         # Draw title bar
-        title = "PROCESS STATS"
+        title = '' # none
         terminal.write_at(x_offset + 2, y_offset, title, color: Theme.border_active + Terminal::COLORS[:bold])
 
         # Pipeline summary

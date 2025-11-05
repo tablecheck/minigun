@@ -94,7 +94,13 @@ module Minigun
           # Auto-center if user hasn't manually panned
           center_x = diagram_width > 0 && diagram_width < @width ? (@width - diagram_width) / 2 : 0
           @pan_x = -center_x  # Pan is negative of offset
-          @pan_y = -1  # 1-line top margin
+
+          # Vertical: If diagram fits with 1-line margin, use it. Otherwise start at zero.
+          if diagram_height + 1 <= @height
+            @pan_y = -1  # 1-line top margin
+          else
+            @pan_y = 0   # Start at top, no margin
+          end
         end
 
         # Clamp pan offsets to valid range
@@ -124,15 +130,28 @@ module Minigun
         max_pan_x = [delta_x, 0].max  # Positive for wide diagrams
 
         # Vertical panning limits:
-        # With 1-line top margin, effective viewport height is @height - 1
-        effective_height = @height - 1
-        delta_y = diagram_height - effective_height
+        # Min: If diagram fits with margin, -1. Otherwise 0 (no negative panning)
+        # Max: Pan down until bottom of diagram at bottom of viewport
+        #
+        # When pan_y = -1: content at (y_offset + 1), giving 1-line top margin
+        # When pan_y = 0:  content at y_offset, no margin
+        # When pan_y = X:  content at (y_offset - X)
+        #
+        # For bottom alignment:
+        #   (y_offset - pan_y) + diagram_height = y_offset + @height
+        #   diagram_height - pan_y = @height
+        #   pan_y = diagram_height - @height
 
-        # Min pan: -1 (1-line top margin showing)
-        # Max pan: When diagram is taller than viewport, allow panning to see bottom
-        #          When diagram fits, keep at -1
-        min_pan_y = -1
-        max_pan_y = [delta_y, -1].max
+        if diagram_height + 1 <= @height
+          min_pan_y = -1  # Small diagram: allow 1-line top margin
+        else
+          min_pan_y = 0   # Large diagram: start at top, no negative panning
+        end
+
+        max_pan_y = diagram_height - @height  # Pan down until bottom of diagram at bottom of viewport
+
+        # Ensure max is at least min (for small diagrams that fit entirely)
+        max_pan_y = [max_pan_y, min_pan_y].max
 
         # Apply clamping
         @pan_x = [[@pan_x, min_pan_x].max, max_pan_x].min
