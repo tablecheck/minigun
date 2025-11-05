@@ -2,6 +2,41 @@
 
 module Minigun
   module HUD
+    # Terminal wrapper that clips writes to viewport boundaries
+    class ClippedTerminal
+      def initialize(terminal, viewport_x, viewport_y, viewport_width, viewport_height)
+        @terminal = terminal
+        @viewport_x = viewport_x
+        @viewport_y = viewport_y
+        @viewport_width = viewport_width
+        @viewport_height = viewport_height
+      end
+
+      def write_at(x, y, text, color: nil)
+        # Check if position is within viewport bounds
+        return if y < @viewport_y || y >= @viewport_y + @viewport_height
+        return if x >= @viewport_x + @viewport_width
+
+        # Clip text if it extends beyond right edge of viewport
+        if x < @viewport_x
+          # Text starts before viewport - clip left portion
+          chars_before = @viewport_x - x
+          return if chars_before >= text.length
+          text = text[chars_before..-1]
+          x = @viewport_x
+        end
+
+        # Clip right side if needed
+        if x + text.length > @viewport_x + @viewport_width
+          visible_length = @viewport_x + @viewport_width - x
+          text = text[0...visible_length] if visible_length > 0
+        end
+
+        # Write clipped text to terminal
+        @terminal.write_at(x, y, text, color: color) if text && !text.empty?
+      end
+    end
+
     # Frame/viewport wrapper for FlowDiagram that handles:
     # - Centering the diagram within the viewport
     # - Panning via arrow keys (a/s/d/w)
@@ -52,6 +87,7 @@ module Minigun
         # Get diagram dimensions
         dims = @flow_diagram.prepare_layout(stats_data)
         diagram_width = dims[:width]
+        diagram_height = dims[:diagram_height]  # Actual content height
 
         # Calculate centering and panning offsets
         unless @user_panned
@@ -62,21 +98,24 @@ module Minigun
         end
 
         # Clamp pan offsets to valid range
-        clamp_pan_offsets(diagram_width)
+        clamp_pan_offsets(diagram_width, diagram_height)
 
         # Calculate final render position
         # Pan offsets shift the viewport: negative pan moves content right/down
         final_x_offset = x_offset - @pan_x
         final_y_offset = y_offset - @pan_y
 
-        # Render diagram at calculated position
-        @flow_diagram.render(terminal, stats_data, x_offset: final_x_offset, y_offset: final_y_offset)
+        # Create a clipped terminal wrapper that enforces viewport boundaries
+        clipped_terminal = ClippedTerminal.new(terminal, x_offset, y_offset, @width, @height)
+
+        # Render diagram through the clipped wrapper
+        @flow_diagram.render(clipped_terminal, stats_data, x_offset: final_x_offset, y_offset: final_y_offset)
       end
 
       private
 
       # Clamp pan offsets based on diagram and viewport dimensions
-      def clamp_pan_offsets(diagram_width)
+      def clamp_pan_offsets(diagram_width, diagram_height)
         # Horizontal panning limits:
         # - Wide diagram: pan from 0 to (diagram_width - viewport_width)
         # - Narrow diagram: pan from (diagram_width - viewport_width) to 0 (negative values)
@@ -85,11 +124,15 @@ module Minigun
         max_pan_x = [delta_x, 0].max  # Positive for wide diagrams
 
         # Vertical panning limits:
-        # - Top: Allow pan_y = -1 for 1-line top margin
-        # - Bottom: Allow panning to see full diagram height
-        # Note: We don't have diagram height here, so just enforce minimum
-        min_pan_y = -1  # Always allow 1-line top margin
-        max_pan_y = 100  # Arbitrary large value, actual clamping happens in FlowDiagram
+        # With 1-line top margin, effective viewport height is @height - 1
+        effective_height = @height - 1
+        delta_y = diagram_height - effective_height
+
+        # Min pan: -1 (1-line top margin showing)
+        # Max pan: When diagram is taller than viewport, allow panning to see bottom
+        #          When diagram fits, keep at -1
+        min_pan_y = -1
+        max_pan_y = [delta_y, -1].max
 
         # Apply clamping
         @pan_x = [[@pan_x, min_pan_x].max, max_pan_x].min

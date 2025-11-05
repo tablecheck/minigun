@@ -13,6 +13,7 @@ module Minigun
         @height = height
         @animation_frame = 0
         @diagram_width = 0  # Actual width of diagram content
+        @diagram_height = 0  # Actual height of diagram content
       end
 
       # Update dimensions (called on resize)
@@ -23,11 +24,11 @@ module Minigun
 
       # Calculate layout and return diagram dimensions
       def prepare_layout(stats_data)
-        return { width: 0, height: 0 } unless stats_data && stats_data[:stages]
+        return { width: 0, height: @height, diagram_height: 0 } unless stats_data && stats_data[:stages]
 
         stages = stats_data[:stages]
         dag = stats_data[:dag]
-        return { width: 0, height: 0 } if stages.empty?
+        return { width: 0, height: @height, diagram_height: 0 } if stages.empty?
 
         # Filter out router stages (internal implementation details)
         visible_stages = stages.reject { |s| s[:type] == :router }
@@ -37,8 +38,16 @@ module Minigun
         @cached_visible_stages = visible_stages
         @cached_dag = dag
 
+        # Calculate actual diagram content height
+        unless @cached_layout.empty?
+          max_y = @cached_layout.values.map { |pos| pos[:y] + pos[:height] }.max
+          @diagram_height = max_y
+        else
+          @diagram_height = 0
+        end
+
         # Return diagram dimensions
-        { width: @diagram_width, height: @height }
+        { width: @diagram_width, height: @height, diagram_height: @diagram_height }
       end
 
       # Render the flow diagram to terminal at given position
@@ -339,8 +348,6 @@ module Minigun
         # Pattern with center target:  ┌───────────────┼───────────────┐
         # Pattern without center:      ┌───────────────┴───────────────┐
         (leftmost_x..rightmost_x).each do |x|
-          next if x < 0 || x >= @width
-
           # Determine the proper box-drawing character
           char = if x == leftmost_x
                    # Left corner
@@ -431,8 +438,6 @@ module Minigun
 
             # Horizontal line from corner to center (or near target)
             ((source[:x] + 1)...to_x).each do |x|
-              next if x < 0 || x >= @width
-
               char = if active
                        offset = (@animation_frame / 4) % 4
                        ["─", "╌", "┄", "┈"][offset]
@@ -448,8 +453,6 @@ module Minigun
 
             # Horizontal line from corner to center (or near target)
             ((to_x + 1)...source[:x]).each do |x|
-              next if x < 0 || x >= @width
-
               char = if active
                        offset = (@animation_frame / 4) % 4
                        ["─", "╌", "┄", "┈"][offset]
@@ -511,8 +514,6 @@ module Minigun
           x_start = [from_x, to_x].min
           x_end = [from_x, to_x].max
           (x_start..x_end).each do |x|
-            next if x < 0 || x >= @width
-
             char = if active
                      offset = (@animation_frame / 4) % 4
                      ["─", "╌", "┄", "┈"][offset]
