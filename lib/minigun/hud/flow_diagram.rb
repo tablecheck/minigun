@@ -2,7 +2,7 @@
 
 module Minigun
   module HUD
-    # Renders pipeline DAG as animated ASCII flow diagram
+    # Renders pipeline DAG as animated ASCII flow diagram with boxes and connections
     class FlowDiagram
       attr_reader :width, :height
 
@@ -10,7 +10,6 @@ module Minigun
         @width = width
         @height = height
         @animation_frame = 0
-        @particles = [] # Moving particles showing data flow
       end
 
       # Render the flow diagram to terminal
@@ -21,26 +20,21 @@ module Minigun
         title = "PIPELINE FLOW"
         terminal.write_at(x_offset + 2, y_offset, title, color: Theme.border_active + Terminal::COLORS[:bold])
 
-        # Calculate layout
         stages = stats_data[:stages]
         return if stages.empty?
 
-        # Simple vertical layout for now
-        y = y_offset + 2
-        spacing = 3
+        # Calculate layout (boxes with positions)
+        layout = calculate_layout(stages)
 
-        stages.each_with_index do |stage_data, index|
-          next if y + spacing > y_offset + @height - 2
+        # Render connections first (so they appear behind boxes)
+        render_connections(terminal, layout, stages, x_offset, y_offset)
 
-          # Render stage node
-          render_stage_node(terminal, stage_data, x_offset + 2, y)
+        # Render stage boxes
+        layout.each do |stage_name, pos|
+          stage_data = stages.find { |s| s[:stage_name] == stage_name }
+          next unless stage_data
 
-          # Render connector to next stage
-          if index < stages.length - 1
-            render_connector(terminal, stage_data, x_offset + 2, y + 1)
-          end
-
-          y += spacing
+          render_stage_box(terminal, stage_data, pos, x_offset, y_offset)
         end
 
         # Update animation
@@ -49,14 +43,127 @@ module Minigun
 
       private
 
-      def render_stage_node(terminal, stage_data, x, y)
+      # Calculate box positions using simple vertical layout with layers
+      # For more complex DAGs, this could be enhanced with proper graph layout
+      def calculate_layout(stages)
+        layout = {}
+        layer_height = 4  # Height for each box + spacing
+        box_width = [@width - 6, 16].min
+        box_height = 3
+
+        # Simple vertical stacking
+        stages.each_with_index do |stage_data, idx|
+          stage_name = stage_data[:stage_name]
+          y = 2 + (idx * layer_height)
+
+          # Skip if it would be off-screen
+          next if y + box_height >= @height
+
+          # Center horizontally
+          x = (@width - box_width) / 2
+
+          layout[stage_name] = { x: x, y: y, width: box_width, height: box_height }
+        end
+
+        layout
+      end
+
+      # Render connections between stages
+      def render_connections(terminal, layout, stages, x_offset, y_offset)
+        stages.each_with_index do |stage_data, idx|
+          next if idx >= stages.length - 1  # Last stage has no outgoing connections
+
+          from_name = stage_data[:stage_name]
+          from_pos = layout[from_name]
+          next unless from_pos
+
+          # Connect to next stage
+          to_stage = stages[idx + 1]
+          to_name = to_stage[:stage_name]
+          to_pos = layout[to_name]
+          next unless to_pos
+
+          # Draw connection
+          render_connection_line(terminal, from_pos, to_pos, stage_data, x_offset, y_offset)
+        end
+      end
+
+      # Draw animated connection line between two boxes
+      def render_connection_line(terminal, from_pos, to_pos, stage_data, x_offset, y_offset)
+        # Connection from bottom center of from_box to top center of to_box
+        from_x = from_pos[:x] + from_pos[:width] / 2
+        from_y = from_pos[:y] + from_pos[:height]
+
+        to_x = to_pos[:x] + to_pos[:width] / 2
+        to_y = to_pos[:y]
+
+        # Check if connection is active (has throughput)
+        active = stage_data[:throughput] && stage_data[:throughput] > 0
+
+        # Draw vertical line with flowing animation
+        (from_y...to_y).each do |y|
+          next if y < 0 || y >= @height
+
+          # Animated flowing character
+          char = if active
+                   # Use animation frame to create flowing effect
+                   offset = (@animation_frame / 4) % Theme::FLOW_CHARS.length
+                   phase = (y - from_y + offset) % Theme::FLOW_CHARS.length
+                   Theme::FLOW_CHARS[phase]
+                 else
+                   "│"
+                 end
+
+          color = active ? Theme.primary : Theme.muted
+
+          terminal.write_at(x_offset + from_x, y_offset + y, char, color: color)
+        end
+
+        # If stages are not vertically aligned, draw horizontal segment
+        if from_x != to_x
+          x_start = [from_x, to_x].min
+          x_end = [from_x, to_x].max
+          (x_start..x_end).each do |x|
+            next if x < 0 || x >= @width
+
+            char = if active
+                     # Animated horizontal flow
+                     offset = (@animation_frame / 4) % 4
+                     ["─", "╌", "┄", "┈"][offset]
+                   else
+                     "─"
+                   end
+
+            color = active ? Theme.primary : Theme.muted
+
+            terminal.write_at(x_offset + x, y_offset + from_y, char, color: color)
+          end
+
+          # Corner characters
+          color = active ? Theme.primary : Theme.muted
+          if from_x < to_x
+            terminal.write_at(x_offset + from_x, y_offset + from_y, "└", color: color)
+            terminal.write_at(x_offset + to_x, y_offset + from_y, "┐", color: color) if to_y > from_y
+          elsif from_x > to_x
+            terminal.write_at(x_offset + from_x, y_offset + from_y, "┘", color: color)
+            terminal.write_at(x_offset + to_x, y_offset + from_y, "┌", color: color) if to_y > from_y
+          end
+        end
+      end
+
+      # Render a stage as a box with icon, name, and status
+      def render_stage_box(terminal, stage_data, pos, x_offset, y_offset)
         name = stage_data[:stage_name]
         status = determine_status(stage_data)
         type = stage_data[:type] || :processor
 
-        # Truncate name if too long
-        max_name_width = @width - 10
-        display_name = name.to_s.length > max_name_width ? name.to_s[0...(max_name_width - 2)] + ".." : name.to_s
+        # Truncate name to fit in box
+        max_name_len = pos[:width] - 4  # Leave room for icon and padding
+        display_name = if name.to_s.length > max_name_len
+                         name.to_s[0...(max_name_len - 1)] + "…"
+                       else
+                         name.to_s
+                       end
 
         # Status indicator and icon
         indicator = Theme.status_indicator(status)
@@ -71,41 +178,40 @@ module Minigun
                 else Theme.stage_idle
                 end
 
-        # Render node: [icon] name indicator
-        # Calculate visual length (without ANSI codes)
-        visual_text = "#{icon} #{display_name} #{indicator}"
+        x = pos[:x]
+        y = pos[:y]
+        w = pos[:width]
+        h = pos[:height]
 
-        # Add throughput if available, but ensure total doesn't exceed width
+        # Draw box borders
+        # Top border
+        terminal.write_at(x_offset + x, y_offset + y, "┌" + ("─" * (w - 2)) + "┐", color: Theme.border)
+
+        # Middle line with content
+        content = "#{icon} #{display_name} #{indicator}"
+        padding_left = [(w - content.length - 2) / 2, 1].max
+        padding_right = [w - content.length - padding_left - 2, 1].max
+
+        terminal.write_at(x_offset + x, y_offset + y + 1,
+                         "│" + (" " * padding_left) + content + (" " * padding_right) + "│",
+                         color: color)
+
+        # Bottom border with throughput if available
+        bottom_line = "└" + ("─" * (w - 2)) + "┘"
+
         if stage_data[:throughput] && stage_data[:throughput] > 0
-          throughput_suffix = " (#{format_throughput(stage_data[:throughput])} i/s)"
-          # Check if adding throughput would exceed width
-          if visual_text.length + throughput_suffix.length <= @width
-            visual_text += throughput_suffix
+          throughput_text = format_throughput(stage_data[:throughput])
+          label = " #{throughput_text}/s "
+
+          if label.length <= w - 4
+            # Center the label in the bottom border
+            padding_left = (w - label.length - 2) / 2
+            padding_right = w - label.length - padding_left - 2
+            bottom_line = "└" + ("─" * padding_left) + label + ("─" * padding_right) + "┘"
           end
         end
 
-        # Truncate if still too long
-        visual_text = visual_text[0...@width] if visual_text.length > @width
-
-        terminal.write_at(x, y, visual_text, color: color)
-      end
-
-      def render_connector(terminal, stage_data, x, y)
-        # Animated connector showing data flow
-        active = stage_data[:throughput] && stage_data[:throughput] > 0
-
-        if active
-          # Animate with flowing characters
-          frame_mod = @animation_frame % Theme::FLOW_CHARS.length
-          char = Theme::FLOW_CHARS[frame_mod]
-          color = Theme.primary
-        else
-          # Static connector
-          char = "│"
-          color = Theme.muted
-        end
-
-        terminal.write_at(x + 1, y, char, color: color)
+        terminal.write_at(x_offset + x, y_offset + y + 2, bottom_line, color: Theme.border)
       end
 
       def determine_status(stage_data)
@@ -130,11 +236,9 @@ module Minigun
       end
 
       def format_throughput(value)
-        if value > 1_000_000_000
-          "#{(value / 1_000_000_000.0).round(1)}B"
-        elsif value > 1_000_000
+        if value >= 1_000_000
           "#{(value / 1_000_000.0).round(1)}M"
-        elsif value > 1_000
+        elsif value >= 1_000
           "#{(value / 1_000.0).round(1)}K"
         else
           value.round(1).to_s

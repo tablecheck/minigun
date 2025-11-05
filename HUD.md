@@ -76,6 +76,8 @@ Use `Minigun::HUD.run_with_hud` to automatically run your task with HUD monitori
 Minigun::HUD.run_with_hud(MyPipelineTask)
 ```
 
+**Note**: When the pipeline finishes, the HUD stays open to display final statistics. Press `q` to exit. This allows you to review the final state, throughput metrics, and latency percentiles before closing.
+
 ### Option 3: Manual Control
 
 For more control, manually create and manage the HUD controller:
@@ -101,10 +103,10 @@ hud_thread.join
 
 | Key | Action |
 |-----|--------|
-| `q` / `Q` | Quit HUD |
-| `Space` | Pause/Resume updates |
-| `h` / `H` / `?` | Toggle help overlay |
-| `r` / `R` | Force refresh / recalculate layout |
+| `q` / `Q` | Quit HUD (works anytime, including when pipeline finished) |
+| `Space` | Pause/Resume updates (disabled when finished) |
+| `h` / `H` / `?` | Toggle help overlay (disabled when finished) |
+| `r` / `R` | Force refresh / recalculate layout (disabled when finished) |
 | `↑` / `↓` | Scroll process list |
 | `d` / `D` | Toggle detailed view (future) |
 | `c` / `C` | Compact view (future) |
@@ -113,24 +115,48 @@ hud_thread.join
 
 ### Flow Diagram (Left Panel)
 
-The left panel shows your pipeline stages as an animated flow diagram:
+The left panel shows your pipeline stages as boxes with animated connections:
 
-- **Stage icons**:
-  - `▶` Producer (generates data)
-  - `◆` Processor (transforms data)
-  - `◀` Consumer (consumes data)
-  - `⊞` Accumulator (batches items)
-  - `◇` Router (distributes to multiple stages)
-  - `⑂` Fork (IPC/COW process)
+```
+  ┌─────────────────┐
+  │ ▶ generator ⚡  │
+  └──── 23.5/s ─────┘
+          ⣿  ← flowing animation
+  ┌─────────────────┐
+  │ ◆ processor ⚡  │
+  └──── 23.5/s ─────┘
+          ⣿
+  ┌─────────────────┐
+  │ ◀ consumer ⏸   │
+  └─────────────────┘
+```
 
-- **Status indicators**:
-  - `⚡` Active (currently processing)
-  - `⏸` Idle (waiting for work)
-  - `⚠` Bottleneck (slowest stage)
-  - `✖` Error (failures detected)
-  - `✓` Done (completed)
+**Box Components:**
+- **Header Line**: Top border with stage name
+- **Content**: Icon + Stage Name + Status Indicator
+- **Footer**: Bottom border with throughput rate (when active)
+- **Colors**: Status-based (green=active, yellow=bottleneck, red=error, gray=idle)
 
-- **Animations**: Flowing characters indicate active data movement
+**Stage Icons:**
+- `▶` Producer (generates data)
+- `◆` Processor (transforms data)
+- `◀` Consumer (consumes data)
+- `⊞` Accumulator (batches items)
+- `◇` Router (distributes to multiple stages)
+- `⑂` Fork (IPC/COW process)
+
+**Status Indicators:**
+- `⚡` Active (currently processing)
+- `⏸` Idle (waiting for work)
+- `⚠` Bottleneck (slowest stage)
+- `✖` Error (failures detected)
+- `✓` Done (completed)
+
+**Connection Animations:**
+- Active connections show flowing Braille characters: `⠀⠁⠃⠇⠏⠟⠿⡿⣿`
+- Horizontal lines pulse with dashed patterns: `─╌┄┈`
+- Inactive connections shown as static gray lines
+- Flow direction top-to-bottom through pipeline stages
 
 ### Process Statistics (Right Panel)
 
@@ -155,9 +181,9 @@ The right panel displays a performance table:
 ### Status Bar (Bottom)
 
 Shows:
-- **Pipeline status**: RUNNING or PAUSED
+- **Pipeline status**: RUNNING, PAUSED, or FINISHED
 - **Pipeline name**: Current pipeline being monitored
-- **Keyboard hints**: Available controls
+- **Keyboard hints**: Available controls (changes to "Press [q] to exit..." when finished)
 
 ## Example
 

@@ -10,7 +10,7 @@ module Minigun
       FRAME_TIME = 1.0 / FPS
 
       attr_reader :terminal, :flow_diagram, :process_list, :stats_aggregator
-      attr_accessor :running, :paused
+      attr_accessor :running, :paused, :pipeline_finished
 
       def initialize(pipeline, on_quit: nil)
         @pipeline = pipeline
@@ -18,6 +18,7 @@ module Minigun
         @stats_aggregator = StatsAggregator.new(pipeline)
         @running = false
         @paused = false
+        @pipeline_finished = false
         @show_help = false
         @resize_requested = false
         @on_quit = on_quit  # Optional callback when user quits
@@ -53,8 +54,8 @@ module Minigun
           handle_input
           break unless @running
 
-          # Update and render if not paused
-          unless @paused
+          # Update and render if not paused (or if finished - always show final state)
+          unless @paused && !@pipeline_finished
             render_frame
           end
 
@@ -132,7 +133,9 @@ module Minigun
 
       def render_status_bar
         y = @terminal.height - 1
-        status_text = if @paused
+        status_text = if @pipeline_finished
+                        "#{Theme.info}FINISHED#{Terminal::COLORS[:reset]}"
+                      elsif @paused
                         "#{Theme.warning}PAUSED#{Terminal::COLORS[:reset]}"
                       else
                         "#{Theme.success}RUNNING#{Terminal::COLORS[:reset]}"
@@ -143,7 +146,11 @@ module Minigun
         @terminal.write_at(2, y, left_text)
 
         # Right side: controls hint
-        right_text = "[h] Help [q] Quit [space] Pause"
+        right_text = if @pipeline_finished
+                       "Press [q] to exit..."
+                     else
+                       "[h] Help [q] Quit [space] Pause"
+                     end
         @terminal.write_at(@terminal.width - right_text.length - 2, y, right_text, color: Theme.muted)
       end
 

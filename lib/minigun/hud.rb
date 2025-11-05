@@ -85,7 +85,7 @@ module Minigun
         end
       end
 
-      # Monitor for user quit
+      # Monitor for user quit or task completion
       loop do
         if user_quit
           # User pressed 'q' in HUD - exit immediately
@@ -93,7 +93,19 @@ module Minigun
           break
         end
 
-        break unless task_thread.alive?
+        # Check if task finished
+        unless task_thread.alive?
+          # Task finished - notify HUD and wait for user to press key
+          hud.pipeline_finished = true
+
+          # Wait for user to quit via HUD
+          loop do
+            break if user_quit
+            sleep 0.1
+          end
+          break
+        end
+
         sleep 0.1
       end
 

@@ -4,8 +4,8 @@
 # Demo script showing Minigun HUD in action
 # Run with: ruby examples/hud_demo.rb
 
-require_relative 'lib/minigun'
-require_relative 'lib/minigun/hud'
+require_relative '../lib/minigun'
+require_relative '../lib/minigun/hud'
 
 # Define a demo pipeline with various stages
 class HudDemoTask
