@@ -2044,6 +2044,16 @@ RSpec.describe 'Examples Integration' do
     end
   end
 
+  describe 'hud_demo.rb' do
+    it 'defines HudDemoTask class' do
+      # HUD demo is an interactive infinite loop with user prompts
+      # Just verify the file defines the expected class
+      hud_demo_code = File.read(File.expand_path('../../examples/hud_demo.rb', __dir__))
+      expect(hud_demo_code).to include('class HudDemoTask')
+      expect(hud_demo_code).to include('Minigun::HUD.run_with_hud')
+    end
+  end
+
   # Coverage check: ensure all example files have tests
   describe 'Example Coverage' do
     it 'has tests for all example files' do

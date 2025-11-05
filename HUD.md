@@ -2,7 +2,23 @@
 
 A cyberpunk-inspired terminal UI for monitoring Minigun pipelines in real-time. Features an htop-like interface with animated flow diagrams and live performance metrics.
 
+> **GO BRRRRR WITH STYLE** 🔥💚⚡
+
 ![Minigun HUD Demo](docs/hud-screenshot.png)
+
+## Table of Contents
+
+- [Features](#features)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Keyboard Controls](#keyboard-controls)
+- [Display Elements](#display-elements)
+- [Example](#example)
+- [Architecture](#architecture)
+- [API Reference](#api-reference)
+- [Performance](#performance-considerations)
+- [Troubleshooting](#troubleshooting)
+- [Future Enhancements](#future-enhancements)
 
 ## Features
 
@@ -135,6 +151,93 @@ ruby examples/hud_demo.rb
 ```
 
 This demo creates a multi-stage pipeline with varying latencies to demonstrate the HUD's monitoring capabilities.
+
+## API Reference
+
+### `Minigun::HUD.launch(pipeline)`
+
+Launch HUD for a pipeline. Blocks until user quits.
+
+**Parameters:**
+- `pipeline` - A `Minigun::Pipeline` instance
+
+**Example:**
+```ruby
+pipeline = task.instance_variable_get(:@_minigun_task).root_pipeline
+Minigun::HUD.launch(pipeline)
+```
+
+### `Minigun::HUD.run_with_hud(task)`
+
+Run a task with HUD monitoring. Automatically manages HUD lifecycle.
+
+**Parameters:**
+- `task` - A task class or instance (must have a pipeline)
+
+**Returns:** Nothing (blocks until completion or user quits)
+
+**Example:**
+```ruby
+Minigun::HUD.run_with_hud(MyTask)
+# or
+Minigun::HUD.run_with_hud(MyTask.new)
+```
+
+### `Minigun::HUD::Controller.new(pipeline, on_quit: nil)`
+
+Create a HUD controller for manual management.
+
+**Parameters:**
+- `pipeline` - A `Minigun::Pipeline` instance
+- `on_quit` - Optional callback lambda called when user quits
+
+**Methods:**
+- `start()` - Start the HUD (blocks)
+- `stop()` - Stop the HUD
+- `running` - Boolean indicating if HUD is running
+- `paused` - Boolean indicating if HUD is paused
+
+**Example:**
+```ruby
+hud = Minigun::HUD::Controller.new(pipeline)
+hud_thread = Thread.new { hud.start }
+
+# Do work...
+
+hud.stop
+hud_thread.join
+```
+
+### Color Theme
+
+Access theme colors via `Minigun::HUD::Theme`:
+
+```ruby
+Theme.primary         # Matrix green
+Theme.secondary       # Cyan
+Theme.success        # Bright green
+Theme.warning        # Yellow
+Theme.danger         # Red
+Theme.stage_active   # Bold bright green
+Theme.stage_idle     # Gray
+```
+
+### Icons
+
+```ruby
+Theme.stage_icon(:producer)    # ▶
+Theme.stage_icon(:processor)   # ◆
+Theme.stage_icon(:consumer)    # ◀
+Theme.stage_icon(:accumulator) # ⊞
+Theme.stage_icon(:router)      # ◇
+Theme.stage_icon(:fork)        # ⑂
+
+Theme.status_indicator(:active)     # ⚡
+Theme.status_indicator(:idle)       # ⏸
+Theme.status_indicator(:bottleneck) # ⚠
+Theme.status_indicator(:error)      # ✖
+Theme.status_indicator(:done)       # ✓
+```
 
 ## Architecture
 
