@@ -129,19 +129,11 @@ module Minigun
           @flow_diagram.mark_cleared
         end
 
-        # Prepare layout to get diagram dimensions for centering
-        panel_width = @left_width - 2  # Subtract borders
-        dims = @flow_diagram.prepare_layout(stats_data)
-        diagram_width = dims[:width]
+        # Prepare layout (handles centering internally via pan offsets)
+        @flow_diagram.prepare_layout(stats_data, auto_center: true)
 
-        # Center diagram if it's narrower than panel and user hasn't manually panned
-        center_offset = if diagram_width > 0 && diagram_width < panel_width && !@flow_diagram.instance_variable_get(:@user_panned)
-                          (panel_width - diagram_width) / 2
-                        else
-                          0
-                        end
-
-        @flow_diagram.render(@terminal, stats_data, x_offset: 2 + center_offset, y_offset: 2)
+        # Render at base panel position (FlowDiagram uses pan offsets for centering)
+        @flow_diagram.render(@terminal, stats_data, x_offset: 2, y_offset: 2)
 
         # Render process list (right panel)
         @process_list.render(@terminal, stats_data, x_offset: @left_width + 1, y_offset: 2)

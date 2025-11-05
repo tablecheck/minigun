@@ -23,11 +23,8 @@ module Minigun
       def resize(width, height)
         @width = width
         @height = height
-        # If user hasn't manually panned, reset to centered view on resize
-        unless @user_panned
-          @pan_x = 0
-          @pan_y = 0
-        end
+        # Don't reset pan offsets here - prepare_layout will recalculate centering
+        # on next frame if user hasn't manually panned
         @needs_clear = true
       end
 
@@ -41,7 +38,7 @@ module Minigun
 
       # Calculate layout and return diagram dimensions
       # This allows Controller to determine centering before rendering
-      def prepare_layout(stats_data)
+      def prepare_layout(stats_data, auto_center: false)
         return { width: 0, height: 0 } unless stats_data && stats_data[:stages]
 
         stages = stats_data[:stages]
@@ -55,6 +52,11 @@ module Minigun
         @cached_layout = calculate_layout(visible_stages, dag)
         @cached_visible_stages = visible_stages
         @cached_dag = dag
+
+        # Initialize pan to centered position if requested and not manually panned
+        if auto_center && !@user_panned
+          center_diagram_in_viewport(@cached_layout)
+        end
 
         # Clamp pan offsets to prevent panning outside the diagram bounds
         clamp_pan_offsets(@cached_layout)
@@ -112,6 +114,37 @@ module Minigun
         # Clear entire diagram area including title line
         (0...@height).each do |y|
           terminal.write_at(x_offset, y_offset + y, " " * @width)
+        end
+      end
+
+      # Center diagram in viewport by setting pan offsets
+      def center_diagram_in_viewport(layout)
+        return if layout.empty?
+
+        # Calculate diagram dimensions
+        min_x = layout.values.map { |pos| pos[:x] }.min
+        max_x = layout.values.map { |pos| pos[:x] + pos[:width] }.max
+        min_y = layout.values.map { |pos| pos[:y] }.min
+        max_y = layout.values.map { |pos| pos[:y] + pos[:height] }.max
+
+        diagram_width = max_x - min_x
+        diagram_height = max_y - min_y
+
+        # Center horizontally if diagram is narrower than viewport
+        # Pan is negative of offset: to shift right by X, pan left by -X
+        if diagram_width < @width
+          center_offset_x = (@width - diagram_width) / 2
+          @pan_x = -center_offset_x
+        else
+          @pan_x = 0
+        end
+
+        # Center vertically if diagram is shorter than viewport
+        if diagram_height < @height
+          center_offset_y = (@height - diagram_height) / 2
+          @pan_y = -center_offset_y
+        else
+          @pan_y = 0
         end
       end
 
